@@ -1,43 +1,76 @@
-# =========== 第一步：鎖國政策 ===========
-# 忽略所有檔案 (不管你是 json, mp4, jpg 還是什麼，通通擋掉)
-*
+﻿# Python cache / build
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
 
-# =========== 第二步：開門讓 Git 進入資料夾 ===========
-# 如果不加這行，Git 連資料夾都不會進去，就找不到深層的 .py 檔了
-!*/
-
-# =========== 第三步：排除地雷區 (非常重要！) ===========
-# 雖然我們只收 .py，但虛擬環境 (venv) 裡面有幾萬個 .py 檔是函式庫的，
-# 我們不想上傳那些東西！請把你有的虛擬環境名稱寫在這
+# Virtual environments
 .venv/
 venv/
 env/
-__pycache__/
-.git/
-.idea/
+
+# Editor / OS
 .vscode/
+.idea/
+.DS_Store
+Thumbs.db
 
-# =========== 第四步：發放通行證 (白名單) ===========
-# 只有 .py 檔案可以通過
-!*.py
+# Windows metadata
+*.Zone.Identifier
 
-# =========== 新增的黑名單 ===========
-# 雖然他是 py 檔，但我不想讓他進去
-# (請把不想上傳的檔名列在下面，一行一個)
-visualization.py
-triangutest.py
-media.py
-mediavideo.py
-jointstest.py
-test.py
-yolo.py
-notebooks/
-src/
+# Model weights / binaries
+*.pt
+*.onnx
+*.engine
+
+# Large raw media
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+*.jpg
+*.jpeg
+*.png
+
+# Generated outputs
+real_world_output/
+real_world_output_demo/
+triangulation_output/
+triangulation_output_4views/
+triangulation_output_4views_ransac/
+triangulation_output_4views_simple/
+triangulation_output_4views_smoothed/
+comparison_frames_output/
+comparison_frames_output_aligned/
+comparison_frames_output_mpjpe/
+render_output_pro/
+visualization_output_4cams/
+runs/
+mediaoutputs/
+mediavideos/
+rendervideo/
+calib_out_cam1/
+calib_out_cam2/
+debug/artifacts/
+
+# Large datasets / external assets
+CMU/
+support_data/
 psbody-mesh/
 
-# 不要忘了讓 .gitignore 自己也能通過，不然下次它就不見了
-!.gitignore
+# Local notebook noise
+.ipynb_checkpoints/
 
-# (選填) 建議這兩個也留著，不然專案會看起來像孤兒
-!README.md
-!requirements.txt
+# Keep code and docs in calibration folder but not raw videos
+calib_charuco_v2/*.mp4
+
+# Logs
+*.log
+
+# Demo asset
+src/amass/tools/teaser.gif
+
+# Alternate Windows ADS exported names
+*Zone.Identifier*
