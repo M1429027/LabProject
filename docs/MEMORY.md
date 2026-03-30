@@ -21,9 +21,8 @@ Scope:
 - intrinsics/extrinsics calibration workflows
 - calibration-focused debug tools
 
-Current mapping (phase 2 started):
+Current mapping:
 - canonical: `camera_system/camera_calibration/*`
-- compatibility alias: root `camera_calibration` symlink -> `camera_system/camera_calibration`
 
 ### Domain B: `reconstruction_pipeline/`
 Scope:
@@ -31,12 +30,11 @@ Scope:
 - time alignment, triangulation, 3D reconstruction
 - reconstruction evaluation and debug tools
 
-Current mapping (phase 2 started):
+Current mapping:
 - canonical: `reconstruction_pipeline/algorithm_pipeline/*`
-- compatibility alias: root `algorithm_pipeline` symlink -> `reconstruction_pipeline/algorithm_pipeline`
 
 Compatibility note:
-- During transition, legacy folders remain valid runtime paths.
+- Domain boundaries are strict: no new legacy aliases.
 - New code should follow domain boundaries and avoid cross-domain coupling.
 
 ## Tool Discovery
@@ -121,6 +119,13 @@ Mutating examples:
 - move/delete files or folders
 - privileged commands (`sudo`)
 - branch/push/force operations
+## Runtime Activation
+- Runtime uses Python virtual environment under `/home/yp8700/amass/.venv`.
+- Before running project code, always execute:
+  - `cd /home/yp8700/amass`
+  - `source .venv/bin/activate`
+- Then run scripts from repo root: `/home/yp8700/amass/amass`.
+
 ## Operating Environment
 - Host OS: Windows
 - Runtime: WSL Ubuntu (Linux)

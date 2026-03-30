@@ -1,75 +1,76 @@
 ﻿# LabProject
 
-Human pose reconstruction project: from multi-view 2D keypoints to 3D skeleton, with a separate real-world camera calibration workflow.
+Multi-view human pose project for reconstructing 3D skeletons from 2D keypoints, with a separated camera-calibration domain for real-world deployment.
 
-## What This Repo Contains
-
-- `algorithm_pipeline/`: 2D->3D reconstruction algorithms, evaluation, and AMASS-related pipeline code.
-- `camera_calibration/`: camera capture app, ChArUco intrinsics/extrinsics calibration, and calibration debug tools.
-- `docs/`: project structure and optimization notes.
-- `scripts/`: quick command references.
-
-## Project Structure
+## Repository Layout
 
 ```text
 LabProject/
-├─ algorithm_pipeline/
-│  ├─ pipelines/          # end-to-end runnable pipelines
-│  ├─ modules/            # reusable algorithm modules
-│  ├─ evaluation/         # comparison/evaluation scripts
-│  ├─ experimental/       # non-core experiments
-│  ├─ configs/            # algorithm configs
-│  └─ notebooks/
-├─ camera_calibration/
-│  ├─ capture/            # camera GUI / recording
-│  ├─ charuco/            # ChArUco calibration workflow
-│  ├─ debug/              # calibration diagnostics + artifacts
-│  ├─ legacy/             # older calibration scripts (reference)
-│  └─ configs/            # reserved for centralized camera configs
-├─ docs/
-├─ scripts/
-├─ src/                   # AMASS package code
-├─ requirements.txt
-├─ setup.py
-└─ .gitignore
+|- camera_system/
+|  |- camera_calibration/
+|  |  |- capture/                     # camera GUI / recording
+|  |  |- charuco/calib_charuco_v2/    # ChArUco intrinsics/extrinsics pipeline
+|  |  |- debug/                       # calibration-local compatibility folder
+|  |  `- legacy/                      # older calibration scripts (reference)
+|  `- debug_tools/                    # camera debug scripts
+|- reconstruction_pipeline/
+|  |- algorithm_pipeline/
+|  |  |- pipelines/                   # main runnable pipelines
+|  |  |- modules/                     # reusable algorithm modules
+|  |  |- evaluation/                  # evaluation/comparison tools
+|  |  |- experimental/                # experiments
+|  |  |- configs/                     # algorithm configs
+|  |  `- notebooks/
+|  `- debug_tools/                    # reconstruction debug tools
+|- outputs/                           # generated outputs only
+|  |- calibration/
+|  |- reconstruction/
+|  |- debug/
+|  `- reports/
+|- docs/                              # project docs and memory rules
+|- scripts/                           # utility and consistency scripts
+|- src/                               # AMASS package code
+|- requirements.txt
+`- setup.py
 ```
 
-## Main Entry Points
+## Core Workflows
 
-### Real-world 2D->3D reconstruction
+1. Real-world 2D -> 3D reconstruction
 ```bash
-python algorithm_pipeline/pipelines/real_world_pipeline.py
+python reconstruction_pipeline/algorithm_pipeline/pipelines/real_world_pipeline.py
 ```
 
-### AMASS simulation pipeline
+2. AMASS simulation pipeline
 ```bash
-python algorithm_pipeline/pipelines/main_pipeline.py
+python reconstruction_pipeline/algorithm_pipeline/pipelines/main_pipeline.py
 ```
 
-### Camera preview/recording GUI
+3. Camera GUI / recording
 ```bash
-python camera_calibration/capture/cam_gui.py
+python camera_system/camera_calibration/capture/cam_gui.py
 ```
 
-### ChArUco intrinsics calibration
+4. ChArUco intrinsics calibration
 ```bash
-python camera_calibration/charuco/calib_charuco_v2/calibrate_intrinsics.py --config camera_calibration/charuco/calib_charuco_v2/config_intrinsics_cam1.yaml
+python camera_system/camera_calibration/charuco/calib_charuco_v2/calibrate_intrinsics.py \
+  --config camera_system/camera_calibration/charuco/calib_charuco_v2/config_intrinsics_cam1.yaml
 ```
 
-### ChArUco extrinsics calibration
+5. ChArUco extrinsics calibration
 ```bash
-python camera_calibration/charuco/calib_charuco_v2/calibrate_extrinsics.py --config camera_calibration/charuco/calib_charuco_v2/config_extrinsics_cam1.yaml
+python camera_system/camera_calibration/charuco/calib_charuco_v2/calibrate_extrinsics.py \
+  --config camera_system/camera_calibration/charuco/calib_charuco_v2/config_extrinsics_cam1.yaml
 ```
 
-## Notes for GitHub Cleanliness
+## Output Policy
 
-- Large datasets, model weights, videos, and generated outputs are excluded by `.gitignore`.
-- Core source code and configs are kept under `algorithm_pipeline/` and `camera_calibration/`.
-- If files were renamed/moved, Git history will track them after commit and push.
+All generated files should go under `outputs/` and not be committed unless explicitly needed for docs/examples.
 
 ## Documentation
 
-- Structure guide: `docs/PROJECT_STRUCTURE.md`
-- Optimization roadmap: `docs/2d3d_optimization_plan.md`
-- Push audit reference: `docs/PUSH_CANDIDATES.md`
-- Quick commands: `scripts/RUN_COMMANDS.md`
+- `docs/MEMORY.md` (session rules and execution policy)
+- `docs/PROJECT_STRUCTURE.md` (folder structure details)
+- `docs/2d3d_optimization_plan.md` (optimization roadmap)
+- `docs/PUSH_CANDIDATES.md` (push scope notes)
+- `scripts/RUN_COMMANDS.md` (quick command references)
