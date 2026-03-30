@@ -74,3 +74,16 @@ src/amass/tools/teaser.gif
 
 # Alternate Windows ADS exported names
 *Zone.Identifier*
+
+# Local archive
+old/
+
+# Unified output policy
+outputs/calibration/*
+!outputs/calibration/.gitkeep
+outputs/reconstruction/*
+!outputs/reconstruction/.gitkeep
+outputs/debug/*
+!outputs/debug/.gitkeep
+outputs/reports/*
+!outputs/reports/.gitkeep

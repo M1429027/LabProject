@@ -24,7 +24,7 @@ Workspace: /home/yp8700/amass/amass
 ## Implementation Roadmap
 
 ### Phase 0 - Consistency Check (do first)
-Status: TODO
+Status: IMPLEMENTED (script added)
 
 Deliverable:
 - Script: `check_pipeline_consistency.py`
@@ -42,7 +42,7 @@ Acceptance:
 ---
 
 ### Phase 1 - Offline Time Alignment
-Status: TODO
+Status: IMPLEMENTED (script added)
 
 Deliverable:
 - Script: `estimate_time_offset.py`

@@ -1,0 +1,44 @@
+# ==========================================
+# 專案設定檔 (Project Configuration)
+# ==========================================
+
+# 1. 檔案路徑設定
+paths:
+  input_npz: "support_data/github_data/01_02_poses.npz"   # 輸入的動作檔
+  yolo_model: "yolo11l-pose.pt"                           # YOLO 模型路徑
+  output_root: "./output_experiment_01"                   # 所有的輸出結果都會放在這裡 (自動建立)
+  
+  # 支援資料夾 (包含 SMPL 模型等)
+  support_dir: "support_data"
+
+# 2. 相機參數設定
+camera:
+  distance_scale: 3.5  # 身高的幾倍 (拉遠視角用)
+  resolution: [1600, 1600]
+  fov_degree: 60.0
+
+# 3. 演算法參數
+algorithm:
+  confidence_threshold: 0.4  # YOLO 信心門檻
+  use_smoothing: false       # <--- 這裡控制要不要用濾波器 (設為 false 關閉)
+  
+  # 如果 use_smoothing 為 true，以下參數才有效
+  smoothing_params:
+    min_cutoff: 1.0
+    beta: 0.1
+    d_cutoff: 1.0
+
+# 4. 相機定義 (通常不需更動)
+cam_defs:
+  - id: "cam1"
+    name: "camera1_front_left"
+    angle_signs: [1, 1]
+  - id: "cam2"
+    name: "camera2_back_left"
+    angle_signs: [-1, 1]
+  - id: "cam3"
+    name: "camera3_back_right"
+    angle_signs: [-1, -1]
+  - id: "cam4"
+    name: "camera4_front_right"
+    angle_signs: [1, -1]
