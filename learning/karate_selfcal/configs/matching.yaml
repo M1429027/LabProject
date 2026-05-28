@@ -1,0 +1,29 @@
+stage: matching
+
+inputs:
+  track_jsons: []
+  view_ids: []
+
+matching:
+  use_appearance: true
+  use_pose_similarity: true
+  use_temporal_consistency: true
+  use_motion_prior: true
+
+weights:
+  appearance: 0.15
+  pose_shape: 0.30
+  temporal: 0.30
+  motion_prior: 0.10
+  skeleton_consistency: 0.15
+
+association:
+  max_people: 2
+  min_track_length: 10
+
+lifting:
+  method: heuristic_pseudo3d_v1
+  min_keypoint_confidence: 0.1
+
+outputs:
+  lifting_output_dir: outputs/karate_selfcal/coarse_lifting

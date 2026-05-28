@@ -1,0 +1,25 @@
+stage: detection
+
+detector:
+  backend: yolo_pose
+  model_path: yolo11l-pose.pt
+  device: auto
+  confidence_threshold: 0.35
+  iou_threshold: 0.5
+  max_people: 4
+
+pose:
+  backend: none
+  config_path: ""
+  checkpoint_path: ""
+  return_heatmaps: false
+
+inputs:
+  videos: []
+  view_ids: []
+  max_frames: 0
+
+outputs:
+  output_dir: outputs/karate_selfcal/detection
+  save_annotated_video: false
+  save_heatmaps: false

@@ -1,0 +1,15 @@
+stage: selfcal
+
+selfcal:
+  window_seconds: 5
+  min_matched_frames: 20
+  min_joint_confidence: 0.5
+  min_shared_joints: 6
+
+relative_pose:
+  method: essential_matrix
+  robust_estimator: ransac
+
+bundle_refine:
+  enabled: true
+  max_iterations: 100

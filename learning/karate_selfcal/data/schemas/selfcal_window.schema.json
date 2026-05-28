@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Self-Calibration Window",
+  "type": "object",
+  "required": ["window_id", "frame_start", "frame_end", "matched_frames"],
+  "properties": {
+    "window_id": {
+      "type": "string"
+    },
+    "frame_start": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "frame_end": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "matched_frames": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "estimated_views": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

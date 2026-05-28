@@ -1,0 +1,20 @@
+project:
+  name: karate_selfcal
+  task: multi_view_karate_reconstruction
+  mode: research
+
+data:
+  root_dir: support_data/karate_selfcal
+  output_dir: outputs/karate_selfcal
+  sequence_id: demo_sequence
+  frame_rate: 30
+
+views:
+  min_views: 2
+  max_views: 4
+  synchronized: true
+
+runtime:
+  device: cuda
+  seed: 42
+  log_level: INFO
