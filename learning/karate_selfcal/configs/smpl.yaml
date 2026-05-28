@@ -1,0 +1,12 @@
+stage: smpl
+
+smpl:
+  enabled: false
+  model_type: smpl
+  use_vposer: true
+
+loss_weights:
+  keypoint_3d: 1.0
+  keypoint_2d: 0.5
+  temporal: 0.2
+  prior: 0.1

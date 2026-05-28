@@ -1,0 +1,16 @@
+stage: pose_lifting
+
+inputs:
+  track_jsons: []
+  view_ids: []
+
+pose_lifting:
+  config_path: /home/yp8700/amass/.venv/lib/python3.8/site-packages/mmpose/.mim/configs/body_3d_keypoint/video_pose_lift/h36m/video-pose-lift_tcn-243frm-supv_8xb128-160e_h36m.py
+  checkpoint_path: learning/karate_selfcal/checkpoints/videopose3d_h36m/videopose_h36m_243frames_fullconv_supervised-880bea25_20210527.pth
+  device: cuda:0
+  detector_dataset_name: coco
+  norm_pose_2d: true
+  rebase_keypoint: true
+
+outputs:
+  lifting_output_dir: outputs/karate_selfcal/learned_lifting

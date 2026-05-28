@@ -16,6 +16,11 @@ This repository is organized by responsibility.
 - `camera_calibration/debug/`: calibration/debug scripts and artifacts
 - `camera_calibration/configs/`: reserved for future centralized camera configs
 
+## 3) learning
+- `learning/rumpl_fourview/`: ray-based four-view learning system with known geometry
+- `learning/karate_selfcal/`: calibration-free / self-calibration karate research workspace
+- each learning subproject should keep its own configs, tools, models, and stage logic
+
 ## Root stays minimal
 - project metadata: `README.md`, `requirements.txt`, `setup.py`, `.gitignore`
 - large datasets/outputs remain outside code folders and are ignored by Git.

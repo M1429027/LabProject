@@ -1,0 +1,25 @@
+stage: detection
+
+detector:
+  backend: yolo_hrnet_topdown
+  model_path: yolo11l-pose.pt
+  device: auto
+  confidence_threshold: 0.35
+  iou_threshold: 0.5
+  max_people: 4
+
+pose:
+  backend: hrnet
+  config_path: learning/karate_selfcal/checkpoints/hrnet_w32_coco_256x192/td-hm_hrnet-w32_8xb64-210e_coco-256x192.py
+  checkpoint_path: learning/karate_selfcal/checkpoints/hrnet_w32_coco_256x192/td-hm_hrnet-w32_8xb64-210e_coco-256x192-81c58e40_20220909.pth
+  return_heatmaps: true
+
+inputs:
+  videos: []
+  view_ids: []
+  max_frames: 0
+
+outputs:
+  output_dir: outputs/karate_selfcal/detection_hrnet
+  save_annotated_video: false
+  save_heatmaps: true

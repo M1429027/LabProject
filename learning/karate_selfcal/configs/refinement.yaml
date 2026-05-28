@@ -1,0 +1,11 @@
+stage: refinement
+
+optimization:
+  enabled: true
+  max_iterations: 50
+
+loss_weights:
+  reprojection: 1.0
+  smoothness: 0.5
+  bone_length: 0.5
+  pose_prior: 0.2

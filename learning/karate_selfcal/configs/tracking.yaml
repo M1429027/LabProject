@@ -1,0 +1,30 @@
+stage: tracking
+
+tracker:
+  backend: pose_single_view
+  track_activation_threshold: 0.35
+  lost_track_buffer: 30
+  match_threshold: 0.45
+  min_keypoint_confidence: 0.1
+  iou_weight: 0.45
+  pose_weight: 0.4
+  center_weight: 0.15
+  history_size: 8
+  enable_tracklet_merge: true
+  merge_min_overlap_frames: 2
+  merge_overlap_threshold: 0.72
+  merge_max_gap: 20
+  merge_gap_threshold: 0.72
+
+inputs:
+  detection_jsons: []
+  source_videos: []
+  view_ids: []
+  use_keypoints: true
+  use_boxes: true
+
+outputs:
+  output_dir: outputs/karate_selfcal/tracking
+  save_tracklets: true
+  save_tracked_video: false
+  min_track_length: 5

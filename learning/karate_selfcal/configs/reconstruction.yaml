@@ -1,0 +1,14 @@
+stage: reconstruction
+
+triangulation:
+  method: weighted_linear
+  min_views: 2
+  reprojection_threshold_px: 25.0
+
+constraints:
+  enforce_bone_length: true
+  smooth_temporally: true
+
+outputs:
+  save_keypoints_3d: true
+  save_debug_metrics: true

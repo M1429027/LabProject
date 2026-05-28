@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cross-View Match Track",
+  "type": "object",
+  "required": ["sequence_id", "views", "tracks"],
+  "properties": {
+    "sequence_id": {
+      "type": "string"
+    },
+    "views": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["global_track_id", "view_tracks"],
+        "properties": {
+          "global_track_id": {
+            "type": "string"
+          },
+          "view_tracks": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
