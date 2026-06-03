@@ -9,6 +9,11 @@ selfcal:
 relative_pose:
   method: essential_matrix
   robust_estimator: ransac
+  min_confidence: 0.3
+  frame_step: 2
+  max_points_per_pair: 2000
+  essential_ransac_threshold: 0.001
+  approx_focal_scale: 1.2
 
 bundle_refine:
   enabled: true
