@@ -53,6 +53,80 @@ Multi-view Karate Videos
 
 ---
 
+## Transformer / Refinement 共識
+
+### 核心定位
+Transformer 不作為從零解出整個系統的主模型，而是後端的 refinement 模組。
+
+也就是說，前面仍然要先透過可解釋的 matching、自校正與 triangulation 產生：
+
+- cross-view matched tracklets
+- rough camera extrinsics
+- rough 3D pose
+- 2D keypoints / heatmaps / confidence / visibility
+
+Transformer 的任務是根據這些中間結果進行修正，而不是直接從原始多視角影片中憑空推論所有外參與 3D pose。
+
+### 為什麼這樣設計
+目前實驗顯示，單視角 2D-to-3D lifting 在空手道 close-contact 場景下不穩：
+
+- 單人時可得到基本人體形狀，但仍有前後方向 ambiguity。
+- 多人遮擋與近身互動時，VideoPose3D 的 3D pose 明顯退化。
+- 直接使用 lifted skeleton 的 mean forward vector 做跨視角 matching 會誤導分數。
+
+因此，lifting 目前只能當作弱 cue / 輔助訊號，不應該成為整個 pipeline 的主判斷來源。
+
+### 建議驗證順序
+後續應該採用逐步驗證，而不是一開始就把所有問題交給 Transformer：
+
+1. 先完成可解釋的 cross-view matching baseline。
+2. 再做 multi-frame self-calibration，得到 rough extrinsics。
+3. 再用 rough extrinsics 做 weighted triangulation，得到 rough 3D pose。
+4. 先做 optimization-based refinement baseline：
+   - reprojection loss
+   - bone length consistency
+   - temporal smoothness
+   - camera regularization
+5. 最後再加入 small Transformer 做 refinement。
+
+### Transformer 第一版目標
+第一版 Transformer 建議只做 3D pose refinement，不先同時修 camera。
+
+**輸入**
+- rough 3D joints
+- multi-view 2D keypoints
+- heatmaps / confidence
+- visibility pattern
+- track / view metadata
+
+**輸出**
+- refined 3D joints
+
+等 3D pose refinement 有明確改善後，再考慮第二版輸出 camera residual：
+
+```text
+refined_camera = rough_camera + predicted_residual
+```
+
+### 成功標準
+Transformer 是否值得加入，至少要能在 optimization baseline 之上帶來可觀察改善：
+
+- 3D pose 更平滑且形狀更合理
+- reprojection error 不惡化
+- 遮擋 frame 的 joint recovery 變好
+- 不需要人工外參即可穩定 refine rough result
+
+### 目前結論
+Transformer 方向可行，但前提是它只做 refinement。
+
+本研究的主線應是：
+
+`先用可解釋的 tracking / matching / self-calibration 產生 rough camera + rough 3D，再讓 Transformer 修正。`
+
+不能把前端 matching 與 self-calibration 的錯誤全部留給 Transformer 處理。
+
+---
+
 ## Review 使用方式
 
 為了讓這份文件能持續作為實作中的 review 規格，後面每個 stage 都統一用下面幾個欄位描述：
@@ -558,6 +632,131 @@ Multi-view Karate Videos
 - 能從多幀觀測估出可用的相機相對關係
 - 能重建粗 3D skeleton
 - 在遮擋場景下，相較雙視角 baseline，能恢復更多有效關節
+
+---
+
+## 目前實作狀態：3B 到 4C 前
+
+本節記錄目前從 Stage 3B 到 Stage 4C 前的實作狀態。此段落用於後續 review 與報告撰寫，重點放在已完成項目、驗證結論，以及下一步不應再停留在單純 filter 的原因。
+
+### Stage 3B：跨視角身份匹配
+
+目前 Stage 3B 已完成從 pairwise matching 到 geometry-based hypothesis selection 的銜接。系統不再直接相信兩兩 track 的局部分數，而是先產生全域身份假設，再以多視角幾何一致性決定最終身份分組。
+
+#### Pairwise scoring
+
+Pairwise scoring 的任務是產生候選，而不是決定最終答案。它會對不同 view 的 track pair 計算多個局部相似度：
+
+- `pose_shape`：比較 root-centered、scale-normalized 2D skeleton shape。
+- `motion_prior`：比較 track root 的移動節奏與 motion energy sequence。
+- `visibility`：比較 joint confidence 轉換出的 visible / not visible pattern。
+- `temporal`：檢查兩條 track 是否有足夠時間重疊。
+- `skeleton_consistency`：使用 VideoPose3D lifting 產生的 forward / spine / frontality descriptor 作為弱 cue。
+- `appearance`：保留外觀特徵介面，但因空手道白色道服相似，目前不作為主決策訊號。
+
+目前結論是：`pose_shape`、`motion_prior`、`visibility` 在空手道對打中容易同時對錯誤配對給出合理分數，因為兩位選手本來就會有相近走位、同步進退與互相遮擋。因此 pairwise scoring 的定位是候選生成，不是 identity 定義。
+
+#### Global identity hypotheses
+
+在四視角、兩位主要選手的設定下，系統會固定 anchor view 的 local identity order，並枚舉其他 view 是否交換 local track order。若共有四個 view，則會形成 `2^3 = 8` 種 global identity hypotheses。
+
+此步驟將問題從「單一 pair 是否相似」提升為「整組跨視角身份分配是否一致」。
+
+#### Geometry validation
+
+Geometry validation 會對每個 hypothesis 收集同一 identity、同一 frame、同一 joint id 的跨視角 2D correspondence，接著估計 fundamental matrix 並用 RANSAC 排除 outliers。
+
+評分標準包含：
+
+- `inlier_ratio`：符合該 hypothesis 幾何關係的 correspondence 比例。
+- `median_sampson_error`：對應點相對於 epipolar geometry 的中位誤差。
+- `geometry_score`：綜合 inlier ratio 與 Sampson error 的排序分數。
+
+目前 `selected_hypothesis.json` 已成為 Stage 3B 到 Stage 4A 的正式輸出介面。這代表跨視角 identity selection 的主判斷已從 2D similarity 轉移到 geometry consistency。
+
+### Stage 4A：Rough extrinsics 與 rough triangulation
+
+Stage 4A 使用 `selected_hypothesis.json` 收集跨視角對應點，並以 essential matrix baseline 估計 pairwise relative pose。此階段可估計相機間的相對旋轉與 translation direction，但無法單靠 essential matrix 決定 metric scale。
+
+#### Cheirality sign check
+
+由 essential matrix recover pose 時，translation direction 存在 `t` 與 `-t` 的歧義。系統加入 cheirality check，比較兩個方向下 triangulated points 位於相機前方的比例。
+
+目前結果顯示原始 `t` 的 positive-depth ratio 明顯優於 `-t`，因此目前主要問題不是 translation sign 反轉。
+
+#### Translation scale refinement
+
+translation scale refinement 用於把 pairwise translation directions 對齊成 anchor-based camera graph。此步驟可以檢查與改善相機方向一致性，但不能單獨恢復真實尺度。
+
+目前結論是：pairwise direction consistency 可用，但 absolute scale 需要額外 prior 或後續 optimization。
+
+#### Human scale prior
+
+human scale prior 使用 median human height 作為全域尺度約束。系統會估計 3D skeleton 中 nose 到 ankle midpoint 的高度，並將其對齊到預設人體高度。
+
+此步驟能把人物與相機尺度拉回合理範圍，但它只修正 global scale，無法保證每個 joint 都合理。
+
+### Stage 4B：Oracle geometry validation branch
+
+Stage 4B 是驗證分支，不是 self-calibration 主方法。它使用 dataset / COLMAP 提供的相機 intrinsics 與 extrinsics 作為 oracle geometry，用來回答：
+
+`如果相機幾何是正確的，目前 matching 與 triangulation backend 是否能產生可用 3D？`
+
+目前 4B 已完成其主要驗證任務：
+
+- oracle geometry 下 reprojection error 明顯降低。
+- 3D 結果能看出人體與動作。
+- 仍存在 joint 缺失、跳動與局部不完整。
+
+因此 4B 給出的結論是：目前問題不只來自 self-calibration 外參，還包含 2D observation quality、joint-level triangulation stability，以及缺乏 pose-level prior。4B 已足夠作為 refinement 前的上限參考，不需要在此階段繼續擴成主方法。
+
+### Refinement 前的 filter 與 constraint
+
+目前在正式 pose refinement 前，已加入以下 baseline filter / constraint：
+
+- inlier-aware triangulation
+- per-joint view subset selection
+- minimum triangulation angle check
+- human scale prior
+- bone length prior
+- bone outlier filtering
+- temporal smoothing / completion
+- oracle geometry baseline
+
+#### Joint-level triangulation quality
+
+joint-level triangulation quality 會針對每個 frame、identity、joint 枚舉可用 view subset。每個 subset 會根據 reprojection error、triangulation angle、joint confidence 與 dropped-view penalty 評分，最後選出最穩定的 joint 3D estimate。
+
+此步驟能降低 reprojection error，但仍然是 per-joint decision。它無法保證整副 skeleton 具備人體結構。
+
+#### Bone prior
+
+bone prior 會估計每個 identity 的 median bone length，並將偏離過大的 bone length 以 soft correction 拉回穩定範圍。此步驟能降低骨長波動，但不是完整人體模型。
+
+#### Bone outlier filter
+
+bone outlier filter 專門處理偶發超長骨頭。當 bone length 超過 median length 的倍率門檻時，系統會 clamp 該骨頭並做簡單 temporal smoothing。
+
+此步驟能降低蜘蛛狀爆炸，但不能從結構錯誤的 3D 點中重新推論出完整人體。
+
+### 目前結論：應進入 Stage 4C
+
+目前可以確認，4B 能做的驗證工作已完成到合理段落，refinement 前的 filter 與 constraint 也已達到 baseline 上限。繼續堆疊更多 filter 可能讓序列更平滑，但不一定讓結果更像人，甚至可能抹掉空手道快速動作。
+
+下一步應進入：
+
+`Stage 4C：optimization-based pose refinement`
+
+Stage 4C 的目標不是修單一 joint 或單一 bone，而是以一個 identity 的整副 skeleton 和短時間 window 為單位進行最佳化。建議 loss 包含：
+
+- `reprojection loss`
+- `bone length consistency`
+- `left-right symmetry`
+- `temporal smoothness`
+- `joint confidence weighting`
+- `robust outlier loss`
+
+此階段應作為 Transformer 前的可解釋 baseline。若 optimization-based refinement 無法建立合理人體，直接進入 Transformer 會使錯誤來源變得過度黑盒，難以判斷問題來自 matching、camera、triangulation 或 pose prior。
 
 ---
 

@@ -43,8 +43,13 @@ Multi-view videos
 -> global identity hypotheses
 -> geometry-based hypothesis selection
 -> relative pose estimation
--> rough triangulation (next)
--> refinement / SMPL (later)
+-> rough triangulation
+-> cheirality / scale checks
+-> human-scale prior
+-> joint-quality triangulation
+-> bone prior + outlier filtering
+-> optimization-based pose refinement (next)
+-> SMPL (later)
 ```
 
 ## Layout
@@ -264,6 +269,139 @@ Outputs:
 - `relative_pose_results.json`
 - `run_summary.json`
 
+### Stage 4A-Aux: Pre-Refinement Camera Checks
+
+The current self-calibration branch includes several diagnostic and
+stabilization steps before full pose refinement:
+
+- `run_cheirality_sign_correction.py`: tests the `t` vs `-t` ambiguity from
+  essential-matrix recovery by checking positive-depth ratios.
+- `run_translation_scale_refinement.py`: aligns pairwise translation directions
+  in an anchor-camera graph. This improves direction consistency but does not
+  solve metric scale by itself.
+- `run_human_scale_prior.py`: applies a global scale prior from median human
+  height. This is the current first-pass scale baseline.
+
+Current conclusion:
+
+- translation sign is not the dominant failure mode
+- pairwise direction is usable
+- absolute scale needs an explicit prior or later optimization
+- these checks are sufficient before moving into pose-level refinement
+
+## Stage 5: Rough Triangulation
+
+Stage 5 consumes the selected cross-view identity hypothesis and camera
+extrinsics. In the self-calibration mainline, those extrinsics come from Stage
+4A. In reference experiments, they can come from dataset COLMAP cameras.
+
+Quick example:
+
+```bash
+python -m learning.karate_selfcal.reconstruction.run_triangulation \
+  --selected-hypothesis-json outputs/karate_selfcal/harmony4d_karate_004_fourview_geometry_validation/selected_hypothesis.json \
+  --rough-extrinsics-json outputs/karate_selfcal/harmony4d_karate_004_fourview_relative_pose/rough_extrinsics.json \
+  --track-jsons outputs/karate_selfcal/harmony4d_karate_004_fourview_tracking/tracks_karate004_cam01.json \
+                outputs/karate_selfcal/harmony4d_karate_004_fourview_tracking/tracks_karate004_cam06.json \
+                outputs/karate_selfcal/harmony4d_karate_004_fourview_tracking/tracks_karate004_cam11.json \
+                outputs/karate_selfcal/harmony4d_karate_004_fourview_tracking/tracks_karate004_cam16.json \
+  --view-ids karate004_cam01 karate004_cam06 karate004_cam11 karate004_cam16 \
+  --output-dir outputs/karate_selfcal/harmony4d_karate_004_fourview_triangulation
+```
+
+The current triangulation baseline is inlier-aware:
+
+- filters pairwise epipolar outliers with Sampson error
+- triangulates in undistorted normalized camera coordinates
+- reports pixel reprojection error with the original camera distortion model
+- can select per-joint view subsets by reprojection error, triangulation angle,
+  confidence, and dropped-view penalty
+
+Outputs:
+
+- `triangulated_3d.json`
+- `run_summary.json`
+
+Useful options:
+
+- `--use-view-subset-selection`: choose a better view subset for each joint
+- `--min-triangulation-angle-deg`: reject weak-baseline joint hypotheses
+
+Current conclusion:
+
+- joint-level view subset selection improves reprojection error
+- lower reprojection error alone does not guarantee human-shaped 3D pose
+- per-joint triangulation still needs pose-level constraints
+
+## Stage 5-Aux: Bone Prior and Outlier Filtering
+
+The project now includes two pre-refinement skeleton stabilizers:
+
+- `run_bone_length_prior.py`: estimates per-identity median bone lengths and
+  softly pulls unstable bones toward the identity's stable length profile.
+- `run_bone_outlier_filter.py`: clamps occasional overlong bones and applies
+  light temporal smoothing.
+
+These steps are filters, not full pose refinement. They reduce exploding limbs
+and spider-like artifacts, but they cannot reconstruct a coherent person when
+the whole skeleton is structurally inconsistent.
+
+Current conclusion:
+
+- bone outlier filtering is useful as a safety pass
+- it should not be extended indefinitely as the main solution
+- the next required step is optimization-based pose refinement over the whole
+  skeleton and a temporal window
+
+## Reference Baseline: COLMAP Extrinsics
+
+This is a validation branch, not part of the self-calibration method itself.
+It uses dataset COLMAP intrinsics/extrinsics as an oracle camera baseline to
+answer one debugging question:
+
+`If the cameras are correct, can the current identity matching and triangulation backend produce usable 3D motion?`
+
+Quick example:
+
+```bash
+python -m learning.karate_selfcal.evaluation.run_reference_baseline \
+  --selected-hypothesis-json outputs/karate_selfcal/harmony4d_karate_004_fourview_geometry_validation_v2/selected_hypothesis.json \
+  --track-jsons outputs/karate_selfcal/harmony4d_karate_004_fourview_tracking/tracks_karate004_cam01.json \
+                outputs/karate_selfcal/harmony4d_karate_004_fourview_tracking/tracks_karate004_cam06.json \
+                outputs/karate_selfcal/harmony4d_karate_004_fourview_tracking/tracks_karate004_cam11.json \
+                outputs/karate_selfcal/harmony4d_karate_004_fourview_tracking/tracks_karate004_cam16.json \
+  --view-ids karate004_cam01 karate004_cam06 karate004_cam11 karate004_cam16 \
+  --colmap-cameras-txt /mnt/d/09_karate.zip::09_karate/004_karate/colmap/workplace/cameras.txt \
+  --colmap-images-txt /mnt/d/09_karate.zip::09_karate/004_karate/colmap/workplace/images.txt \
+  --output-dir outputs/karate_selfcal/harmony4d_karate_004_reference_baseline \
+  --render-video
+```
+
+Outputs:
+
+- `rough_extrinsics_colmap.json`
+- `triangulated_3d_raw.json`
+- `triangulated_3d_completed.json`
+- `triangulation_summary.json`
+- `completion_metrics.json`
+- optional raw/completed review videos
+
+The completion step is intentionally simple for now:
+
+- short missing joint gaps are linearly interpolated
+- finite samples are smoothed with a small moving average
+- completeness metrics report joint coverage before and after completion
+
+Current 4B status:
+
+- the oracle branch confirms that the backend can produce lower reprojection
+  error when camera geometry is correct
+- it can show body shape and motion, but still has missing / unstable joints
+- the remaining issue is not only camera extrinsics; it is also 2D observation
+  quality, joint-level triangulation stability, and missing pose-level priors
+- 4B is complete enough for its current purpose: validating the pre-refinement
+  upper bound before Stage 4C
+
 ## What Is Stable Right Now
 
 These parts are already usable as a baseline:
@@ -274,16 +412,35 @@ These parts are already usable as a baseline:
 - global identity hypothesis generation
 - geometry-based hypothesis selection
 - pairwise relative pose estimation
+- inlier-aware triangulation with known camera parameters
+- COLMAP oracle reference baseline for backend validation
+- cheirality sign check
+- human-scale prior
+- joint-quality triangulation
+- bone-length prior and bone outlier filtering
 
 ## What Comes Next
 
 The next implementation target is:
 
-`selected hypothesis + relative pose -> rough multi-view triangulation`
+`Stage 4C: optimization-based pose refinement`
 
-After triangulation becomes stable, the project can continue to:
+The current pre-refinement filters and constraints are at a reasonable baseline
+limit. Continuing to add more filters may make the sequence smoother, but will
+not reliably make it more human-shaped.
 
-- optimization-based refinement
+Stage 4C should optimize an entire identity skeleton over a short temporal
+window with:
+
+- reprojection loss
+- bone length consistency
+- left/right symmetry
+- temporal smoothness
+- joint confidence weighting
+- robust outlier loss
+
+In parallel, the reference baseline can continue to:
+
 - camera bundle refinement
 - SMPL fitting
 - later transformer-based refinement
