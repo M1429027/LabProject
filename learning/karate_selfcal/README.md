@@ -48,9 +48,74 @@ Multi-view videos
 -> human-scale prior
 -> joint-quality triangulation
 -> bone prior + outlier filtering
--> optimization-based pose refinement (next)
+-> pose-level candidate validation (next)
+-> optimization-based pose refinement
+-> transformer schema / dataset loader
 -> SMPL (later)
 ```
+
+## Current Recommended Order Before Transformer
+
+The project should not move directly into full Transformer training yet. The
+current blocker is unstable multi-view joint correspondence: people are mostly
+matched, but individual joints can still be mismatched across views.
+
+Recommended order:
+
+1. GT correspondence diagnostic using dataset `poses3d` / `smpl` as evaluation-only references.
+2. Convert GT findings into non-GT proxy rules for candidate scoring.
+3. Stable joint quality / inlier-view / candidate-3D output.
+4. Transformer token schema definition.
+5. Dataset loader for sequence-level refinement.
+6. Small Transformer baseline.
+7. Full refinement training only after the input quality is stable enough.
+
+The immediate next step is GT correspondence diagnostic. GT is not part of the
+runtime pipeline; it is used to identify which joints, view subsets, and scoring
+terms fail before those findings are translated into inference-time proxy rules.
+
+Current GT-based findings from `09_karate/004_karate`:
+
+- `oracle_scaled_subset_02_07_13` aligns well to GT, with mean joint error near
+  5 cm after similarity alignment. This confirms that the dataset GT and the
+  diagnostic alignment are usable.
+- `pose_hypothesis_selection_v1` is much worse against GT, despite low
+  reprojection error. This points to candidate / view-subset selection rather
+  than a total failure of triangulation.
+- Reprojection error alone is not reliable: many samples have low reprojection
+  error but high GT error.
+- Candidate selection should be refined with joint-specific risk, view-subset
+  risk, ray/depth quality, bone plausibility, and temporal stability.
+
+## Candidate Scoring V2 Findings
+
+`run_pose_hypothesis_selection.py` supports `--use-candidate-scoring-v2`.
+This scoring mode keeps GT out of runtime inference but uses lessons from GT
+diagnostics as soft proxy terms:
+
+- lower weight for reprojection-only quality
+- stronger ray-angle and depth/scale sanity terms
+- joint-specific risk priors for unstable joints
+- view-subset risk penalties for combinations that produced low-reprojection
+  but high-3D-error samples
+- optional single-view reliability penalty for diagnostic experiments
+
+Current result on `09_karate/004_karate`:
+
+| Variant | Extrinsics | Mean GT Error | P90 GT Error | Bad Rate | Low-Reproj Bad |
+|---|---|---:|---:|---:|---:|
+| pose hypothesis v1 | selfcal rough | 0.353 m | 0.592 m | 69.37% | 604 |
+| candidate scoring v2 | selfcal rough | 0.348 m | 0.598 m | 67.25% | 546 |
+| candidate scoring v2b | selfcal rough | 0.348 m | 0.603 m | 66.70% | 535 |
+| candidate scoring v2b | reference extrinsics | 0.039 m | 0.073 m | 0.59% | 7 |
+
+Interpretation:
+
+- Candidate scoring can reduce low-reprojection failure cases, but it cannot
+  fully rescue noisy rough extrinsics.
+- With reference extrinsics, the same scoring path produces a clean result,
+  which makes rough extrinsic refinement the next major blocker before
+  Transformer training.
 
 ## Layout
 
@@ -63,6 +128,7 @@ Multi-view videos
 - `reconstruction/`: weighted triangulation and geometric constraints
 - `refinement/`: post-triangulation pose refinement
 - `smpl/`: SMPL fitting stage
+- `stage_a/`: supervised warm-up dataset and dataloader
 - `evaluation/`: metrics and visualization helpers
 - `tools/`: utilities for inspection, conversion, and annotations
 
@@ -75,6 +141,153 @@ cd /home/yp8700/amass/amass
 source /home/yp8700/amass/.venv/bin/activate
 ```
 
+## Stage A: Supervised Warm-Up
+
+Stage A starts from fixed four-view Harmony4D karate annotations and trains a
+small supervised 3D pose baseline before attempting self-supervised
+pose-camera refinement.
+
+Current selected views:
+
+- `cam02`
+- `cam03`
+- `cam07`
+- `cam16`
+
+Current precomputed dataset:
+
+- Manifest: [manifest.json](/home/yp8700/amass/amass/outputs/karate_selfcal/stage_a_cam02_03_07_16/manifest.json)
+- Selected view index: [selected_views_index.md](/home/yp8700/amass/amass/outputs/karate_selfcal/selected_views_cam02_03_07_16/selected_views_index.md)
+
+Dataset summary:
+
+| Split | Samples | Sequence rule |
+|---|---:|---|
+| train | 17478 | all selected sequences except validation/test |
+| val | 120 | `09_karate/004_karate` |
+| test | 680 | `11_karate3/008_karate3` |
+
+Stage A sample tensor shapes:
+
+| Tensor | Shape |
+|---|---|
+| `ray_tokens` | `[B, 17, 4, 7]` |
+| `view_mask` | `[B, 4]` |
+| `joint_view_mask` | `[B, 17, 4]` |
+| `target_3d` | `[B, 17, 3]` |
+| `target_3d_root_relative` | `[B, 17, 3]` |
+| `target_confidence` | `[B, 17]` |
+
+Build dataset:
+
+```bash
+python -m learning.karate_selfcal.stage_a.build_dataset \
+  --selected-views-manifest outputs/karate_selfcal/selected_views_cam02_03_07_16/selected_views_manifest.json \
+  --output-dir outputs/karate_selfcal/stage_a_cam02_03_07_16 \
+  --val-sequences 09_karate/004_karate \
+  --test-sequences 11_karate3/008_karate3
+```
+
+Check dataloader:
+
+```bash
+python -m learning.karate_selfcal.stage_a.check_dataset \
+  --manifest outputs/karate_selfcal/stage_a_cam02_03_07_16/manifest.json \
+  --batch-size 8
+```
+
+Smoke train:
+
+```bash
+python -m learning.karate_selfcal.stage_a.train \
+  --config learning/karate_selfcal/configs/stage_a_smoke.yaml
+```
+
+Full first-pass train:
+
+```bash
+python -m learning.karate_selfcal.stage_a.train \
+  --config learning/karate_selfcal/configs/stage_a.yaml
+```
+
+Evaluate checkpoint:
+
+```bash
+python -m learning.karate_selfcal.stage_a.evaluate \
+  --checkpoint outputs/karate_selfcal/stage_a_cam02_03_07_16_run/checkpoints/best.pt \
+  --manifest outputs/karate_selfcal/stage_a_cam02_03_07_16/manifest.json \
+  --split test \
+  --output-json outputs/karate_selfcal/stage_a_cam02_03_07_16_run/eval_test.json
+```
+
+## Stage A: A1/A2 Decoupled Validation
+
+The current Stage A validation uses the ray-token dataset with true multi-view
+geometry features:
+
+- Manifest: `outputs/karate_selfcal/stage_a_cam02_03_07_16_ray_split_8_1_1/manifest.json`
+- Token shape: `[B, 17, 4, 11]`
+- Views: `cam02`, `cam03`, `cam07`, `cam16`
+- Test sequence used for detailed review: `11_karate3/008_karate3`
+
+The model keeps the same two-stage attention structure:
+
+```text
+view attention:  same joint across four camera views
+joint attention: 17 fused joint tokens within one person
+```
+
+A1 and A2 are intentionally trained separately as a diagnostic and stabilization
+step before A3 joint fine-tuning:
+
+| Stage | Target | Config | Purpose |
+|---|---|---|---|
+| A1 | root-relative pose | `configs/stage_a_a1_pose_endpoint_8_1_1.yaml` | learn body shape, endpoint position, and limb extension |
+| A2 | global pelvis translation | `configs/stage_a_a2_pelvis_8_1_1.yaml` | learn where the person is in the scene |
+
+Training commands:
+
+```bash
+python -m learning.karate_selfcal.stage_a.train \
+  --config learning/karate_selfcal/configs/stage_a_a1_pose_endpoint_8_1_1.yaml
+
+python -m learning.karate_selfcal.stage_a.train \
+  --config learning/karate_selfcal/configs/stage_a_a2_pelvis_8_1_1.yaml
+```
+
+A1 loss terms:
+
+- base root-relative MPJPE
+- endpoint loss on wrists and ankles: joints `[9, 10, 15, 16]`
+- limb extension loss from pelvis to endpoints
+- high-extension frame weighting for extended strike / kick poses
+
+A2 loss terms:
+
+- pelvis L2 / MPJPE loss only
+- no full-body 3D loss, so the global translation task does not overwrite pose
+  learning
+
+Current composed validation on `11_karate3/008_karate3`:
+
+```text
+full_3d = A1 pred_pose_root_relative + A2 pred_pelvis
+```
+
+| Metric | Endpoint + old pelvis | Endpoint + A2 pelvis | Improvement |
+|---|---:|---:|---:|
+| Absolute MPJPE | 0.132 m | 0.114 m | 13.5% |
+| Pelvis error | 0.109 m | 0.083 m | 24.1% |
+| Endpoint error | 0.150 m | 0.136 m | 9.3% |
+| Wrist error | 0.184 m | 0.171 m | 6.9% |
+| Ankle error | 0.117 m | 0.102 m | 13.0% |
+| Torso error | 0.115 m | 0.091 m | 20.5% |
+| Two-person pelvis distance error | 0.062 m | 0.043 m | 30.5% |
+
+This supports the working hypothesis that root-relative pose and global pelvis
+translation interfere when trained naively as a single objective. The next step
+is A3 staged joint fine-tuning, where A1 initializes the pose branch and A2
+initializes the pelvis branch before producing one final checkpoint.
 ## Stage 1: Detection
 
 The current preferred frontend is:

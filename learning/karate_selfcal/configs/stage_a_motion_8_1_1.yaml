@@ -1,0 +1,38 @@
+experiment:
+  name: stage_a_cam02_03_07_16_ray_motion_split_8_1_1
+  seed: 42
+  output_dir: outputs/karate_selfcal/stage_a_cam02_03_07_16_ray_motion_split_8_1_1_run
+
+data:
+  manifest_path: outputs/karate_selfcal/stage_a_cam02_03_07_16_ray_split_8_1_1/manifest.json
+  train_split: train
+  val_split: val
+  batch_size: 256
+  num_workers: 0
+
+model:
+  input_dim: 11
+  num_joints: 17
+  max_views: 4
+  d_model: 64
+  num_heads: 8
+  view_depth: 2
+  joint_depth: 2
+  mlp_ratio: 2.0
+  dropout: 0.1
+
+loss:
+  target_space: motion
+  root_relative_weight: 1.0
+  absolute_weight: 0.5
+  final_weight: 0.25
+
+training:
+  device: auto
+  epochs: 40
+  lr: 0.0003
+  weight_decay: 0.0001
+  grad_clip_norm: 1.0
+  selection_metric: absolute_mpjpe
+  early_stop_patience: 6
+  early_stop_min_delta: 0.0005
