@@ -79,6 +79,17 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Flip the selected display up axis. This is only for visual inspection.",
     )
+    parser.add_argument(
+        "--mark-review-imputed",
+        action="store_true",
+        help="Render review-imputed joints with lighter markers and lines.",
+    )
+    parser.add_argument(
+        "--axis-percentile",
+        type=float,
+        default=None,
+        help="Optional central percentile for global axis limits, e.g. 98 ignores the outer 1%% on each side.",
+    )
     return parser.parse_args()
 
 
@@ -128,10 +139,20 @@ def frame_coords(identity: dict[str, Any], up_axis: str, flip_up_axis: bool) -> 
     return coords
 
 
+def frame_joint_sources(identity: dict[str, Any]) -> dict[int, str]:
+    """Return joint-id indexed provenance labels for review-smoothed outputs."""
+
+    sources = {}
+    for joint in identity.get("joints", []):
+        sources[int(joint["id"])] = str(joint.get("review_source", "original"))
+    return sources
+
+
 def estimate_axis_limits(
     frames: list[dict[str, Any]],
     up_axis: str,
     flip_up_axis: bool,
+    axis_percentile: float | None = None,
 ) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
     """Estimate stable axis limits across the clip."""
 
@@ -149,8 +170,14 @@ def estimate_axis_limits(
         return (-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0)
 
     def _center_and_half(values: list[float]) -> tuple[float, float]:
-        low = float(np.min(values))
-        high = float(np.max(values))
+        if axis_percentile is not None:
+            clipped_percentile = float(np.clip(axis_percentile, 50.0, 100.0))
+            tail = (100.0 - clipped_percentile) * 0.5
+            low = float(np.percentile(values, tail))
+            high = float(np.percentile(values, 100.0 - tail))
+        else:
+            low = float(np.min(values))
+            high = float(np.max(values))
         center = (low + high) * 0.5
         half_span = (high - low) * 0.5
         return center, half_span
@@ -172,6 +199,7 @@ def render_frame(
     title: str,
     up_axis: str,
     flip_up_axis: bool,
+    mark_review_imputed: bool = False,
 ) -> np.ndarray:
     """Render one frame of triangulated identities."""
 
@@ -198,19 +226,54 @@ def render_frame(
         identity_id = int(identity["identity_id"])
         color = TRACK_COLORS[identity_id % len(TRACK_COLORS)]
         coords = frame_coords(identity, up_axis, flip_up_axis)
+        sources = frame_joint_sources(identity)
         if not coords:
             continue
 
-        xs = [point[0] for point in coords.values()]
-        ys = [point[1] for point in coords.values()]
-        zs = [point[2] for point in coords.values()]
-        ax.scatter(xs, ys, zs, s=28, c=color, depthshade=True, label=f"id {identity_id}")
+        if mark_review_imputed:
+            original_points = [
+                point
+                for joint_id, point in coords.items()
+                if sources.get(joint_id, "original") == "original"
+            ]
+            imputed_points = [
+                point
+                for joint_id, point in coords.items()
+                if sources.get(joint_id, "original") != "original"
+            ]
+            if original_points:
+                arr = np.vstack(original_points)
+                ax.scatter(arr[:, 0], arr[:, 1], arr[:, 2], s=28, c=color, depthshade=True, label=f"id {identity_id}")
+            if imputed_points:
+                arr = np.vstack(imputed_points)
+                ax.scatter(
+                    arr[:, 0],
+                    arr[:, 1],
+                    arr[:, 2],
+                    s=18,
+                    c=color,
+                    alpha=0.35,
+                    marker="x",
+                    depthshade=False,
+                    label=f"id {identity_id} imputed",
+                )
+        else:
+            xs = [point[0] for point in coords.values()]
+            ys = [point[1] for point in coords.values()]
+            zs = [point[2] for point in coords.values()]
+            ax.scatter(xs, ys, zs, s=28, c=color, depthshade=True, label=f"id {identity_id}")
 
         for joint_a, joint_b in COCO_SKELETON_CONNECTIONS:
             if joint_a not in coords or joint_b not in coords:
                 continue
             segment = np.vstack([coords[joint_a], coords[joint_b]])
-            ax.plot(segment[:, 0], segment[:, 1], segment[:, 2], c=color, linewidth=2.0, alpha=0.95)
+            has_imputed = (
+                sources.get(joint_a, "original") != "original"
+                or sources.get(joint_b, "original") != "original"
+            )
+            alpha = 0.35 if mark_review_imputed and has_imputed else 0.95
+            linewidth = 1.2 if mark_review_imputed and has_imputed else 2.0
+            ax.plot(segment[:, 0], segment[:, 1], segment[:, 2], c=color, linewidth=linewidth, alpha=alpha)
 
     if frame_data.get("identities"):
         ax.legend(loc="upper left")
@@ -277,7 +340,12 @@ def main() -> None:
         else input_path.with_name(f"{input_path.stem}_review.mp4")
     )
 
-    axis_limits = estimate_axis_limits(frames, args.up_axis, args.flip_up_axis)
+    axis_limits = estimate_axis_limits(
+        frames,
+        args.up_axis,
+        args.flip_up_axis,
+        axis_percentile=args.axis_percentile,
+    )
     writer = cv2.VideoWriter(
         str(output_path),
         cv2.VideoWriter_fourcc(*"mp4v"),
@@ -307,6 +375,7 @@ def main() -> None:
                 title=title,
                 up_axis=args.up_axis,
                 flip_up_axis=args.flip_up_axis,
+                mark_review_imputed=bool(args.mark_review_imputed),
             )
             writer.write(image)
     finally:
@@ -321,6 +390,8 @@ def main() -> None:
         "size": [int(args.width), int(args.height)],
         "up_axis": args.up_axis,
         "flip_up_axis": bool(args.flip_up_axis),
+        "mark_review_imputed": bool(args.mark_review_imputed),
+        "axis_percentile": args.axis_percentile,
     }
     with output_path.with_suffix(".summary.json").open("w", encoding="utf-8") as handle:
         json.dump(summary, handle, ensure_ascii=False, indent=2)

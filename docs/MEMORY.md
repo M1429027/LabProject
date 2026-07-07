@@ -146,6 +146,14 @@ Mutating examples:
   - aruco_dict=DICT_4X4_50
   - legacy_pattern=true
 
+
+## Webcam Quad Workflow
+- GUI entry: `camera_system/camera_calibration/capture/webcam_quad_gui.py`.
+- Config: `camera_system/camera_calibration/capture/config_camera_webcam_quad.yaml`.
+- Target capture spec: 1280x720 @ 30fps for all 4 webcams.
+- Output location: `outputs/calibration/YYYYMMDD_HHMMSS_webcam_quad_<tag>/`.
+- Post-check report: `sync_report.json` in the same session folder.
+
 ## Memory File Rules
 - Update this file when user requests memory/rule changes.
 - This is the single source of operational rules for this repository.

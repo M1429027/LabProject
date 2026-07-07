@@ -1,0 +1,46 @@
+﻿experiment:
+  name: stage_a_amass_yolo_hard_extrinsic_corrected_anchor_residual
+  seed: 42
+  output_dir: outputs/karate_selfcal/stage_a_amass_yolo_hard_extrinsic_corrected_anchor_residual_run
+
+data:
+  manifest_path: outputs/karate_selfcal/amass_yolo_stage_a_hard_extrinsic_translation_head_train/manifest_filtered_min30_split_8_1_1.json
+  batch_size: 256
+  num_workers: 0
+
+model:
+  input_dim: 11
+  num_joints: 17
+  max_views: 4
+  d_model: 96
+  num_heads: 8
+  view_depth: 3
+  joint_depth: 3
+  mlp_ratio: 2.0
+  dropout: 0.1
+
+training:
+  device: cuda
+  epochs: 160
+  lr: 0.00018
+  weight_decay: 0.0001
+  grad_clip_norm: 1.0
+  selection_metric: absolute_mpjpe
+  early_stop_patience: 35
+  early_stop_min_delta: 0.0001
+  pretrained_checkpoint: outputs/karate_selfcal/stage_a_amass_yolo_hard_extrinsic_translation_head_residual_run/checkpoints/best.pt
+
+loss:
+  target_space: triangulated_residual
+  use_camera_corrected_anchor: true
+  absolute_weight: 1.0
+  root_relative_weight: 0.35
+  endpoint_weight: 0.35
+  limb_extension_weight: 0.25
+  high_extension_weight: 1.0
+  high_extension_threshold: 0.65
+  endpoint_joints: [9, 10, 15, 16]
+  ray_consistency_weight: 0.08
+  reprojection_weight: 0.08
+  camera_delta_weight: 0.25
+  camera_translation_delta_weight: 0.20

@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 
 from .dataset import KarateStageADataset, collate_stage_a
 from .model import build_model
-from .train import load_yaml, move_batch, resolve_device
+from .train import camera_corrected_triangulation, load_yaml, move_batch, resolve_device
 
 
 def parse_args() -> argparse.Namespace:
@@ -119,7 +119,12 @@ def main() -> None:
                 view_mask=batch_on_device["view_mask"],
                 joint_view_mask=batch_on_device["joint_view_mask"],
             )
-            if pelvis_model is not None:
+            if target_space in {"triangulated_residual", "geometry_residual", "anchor_residual"}:
+                anchor = batch_on_device["triangulated_3d"]
+                if bool(loss_cfg.get("use_camera_corrected_anchor", False)):
+                    anchor, _ = camera_corrected_triangulation(outputs=outputs, batch=batch_on_device)
+                predictions = (anchor + outputs["pred_pose_root_relative"]).cpu()
+            elif pelvis_model is not None:
                 pelvis_outputs = pelvis_model(
                     batch_on_device["ray_tokens"],
                     view_mask=batch_on_device["view_mask"],

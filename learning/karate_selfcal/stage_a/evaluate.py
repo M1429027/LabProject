@@ -11,7 +11,7 @@ import torch
 
 from .dataset import KarateStageADataset, collate_stage_a
 from .model import build_model
-from .train import compute_loss, compute_motion_loss, compute_pelvis_loss, move_batch, resolve_device, select_target
+from .train import compute_extrinsic_refine_loss, compute_joint_finetune_loss, compute_loss, compute_motion_loss, compute_pelvis_loss, compute_triangulated_residual_loss, move_batch, resolve_device, select_target
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,6 +56,15 @@ def main() -> None:
         "endpoint_loss": [],
         "limb_extension_loss": [],
         "high_extension_ratio": [],
+        "anchor_absolute_mpjpe": [],
+        "anchor_root_relative_mpjpe": [],
+        "corrected_anchor_absolute_mpjpe": [],
+        "corrected_anchor_root_relative_mpjpe": [],
+        "ray_consistency_loss": [],
+        "camera_delta_loss": [],
+        "camera_translation_delta_loss": [],
+        "camera_rotation_delta_loss": [],
+        "camera_scale_delta_loss": [],
     }
     with torch.no_grad():
         for batch in loader:
@@ -66,13 +75,33 @@ def main() -> None:
                 joint_view_mask=batch["joint_view_mask"],
             )
             target_space = str(loss_cfg.get("target_space", "absolute")).lower()
-            if target_space in {"motion", "full_motion", "root_relative_plus_pelvis"}:
+            if target_space in {"extrinsic_refine", "camera_extrinsic", "extrinsic_only"}:
+                losses = compute_extrinsic_refine_loss(
+                    outputs=outputs,
+                    batch=batch,
+                    loss_cfg=loss_cfg,
+                )
+            elif target_space in {"motion", "full_motion", "root_relative_plus_pelvis"}:
                 losses = compute_motion_loss(
                     outputs=outputs,
                     batch=batch,
                     pose_weight=float(loss_cfg.get("root_relative_weight", 1.0)),
                     pelvis_weight=float(loss_cfg.get("absolute_weight", 1.0)),
                     final_weight=float(loss_cfg.get("final_weight", 0.25)),
+                )
+            elif target_space in {"joint_finetune", "a3_joint", "staged_joint"}:
+                losses = compute_joint_finetune_loss(
+                    outputs=outputs,
+                    batch=batch,
+                    loss_cfg=loss_cfg,
+                )
+            elif target_space in {"triangulated_residual", "geometry_residual", "anchor_residual"}:
+                losses = compute_triangulated_residual_loss(
+                    outputs=outputs,
+                    batch=batch,
+                    root_relative_weight=float(loss_cfg.get("root_relative_weight", 1.0)),
+                    absolute_weight=float(loss_cfg.get("absolute_weight", 1.0)),
+                    loss_cfg=loss_cfg,
                 )
             elif target_space in {"pelvis", "global_pelvis", "translation"}:
                 losses = compute_pelvis_loss(

@@ -1,0 +1,35 @@
+experiment:
+  name: stage_a_harmony4d_karate_004_selfrough_matched_residual_infer_2026_07_06
+  seed: 42
+  output_dir: outputs/karate_selfcal/harmony4d_karate_004_views_02_03_07_13_stage_a_selfrough_residual_matched_infer_2026_07_06
+
+data:
+  manifest_path: outputs/karate_selfcal/harmony4d_karate_004_views_02_03_07_13_stage_a_selfrough_matched_2026_07_06/manifest.json
+  train_split: test
+  val_split: test
+  batch_size: 256
+  num_workers: 0
+
+model:
+  input_dim: 11
+  num_joints: 17
+  max_views: 4
+  d_model: 64
+  num_heads: 8
+  view_depth: 2
+  joint_depth: 2
+  mlp_ratio: 2.0
+  dropout: 0.1
+
+training:
+  device: cuda
+
+loss:
+  target_space: triangulated_residual
+  absolute_weight: 1.0
+  root_relative_weight: 0.25
+  endpoint_weight: 0.35
+  limb_extension_weight: 0.25
+  high_extension_weight: 1.0
+  high_extension_threshold: 0.65
+  endpoint_joints: [9, 10, 15, 16]

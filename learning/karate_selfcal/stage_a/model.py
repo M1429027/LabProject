@@ -87,6 +87,34 @@ class StageARayFusionModel(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(d_model, 3),
         )
+        self.camera_delta_head = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, d_model),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model, 3),
+        )
+        self.camera_translation_head = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, d_model),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model, 3),
+        )
+        self.camera_rotation_head = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, d_model),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model, 3),
+        )
+        self.camera_scale_head = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, d_model),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model, 1),
+        )
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
@@ -135,6 +163,21 @@ class StageARayFusionModel(nn.Module):
         for block in self.view_blocks:
             view_tokens = block(view_tokens, key_padding_mask=key_padding_mask)
 
+        per_view_tokens = view_tokens[:, 1:, :].reshape(batch, joints, views, self.d_model)
+        if joint_view_mask is not None:
+            view_joint_weights = joint_view_mask.bool().float().permute(0, 2, 1).unsqueeze(-1)
+            per_view_for_head = per_view_tokens.permute(0, 2, 1, 3)
+            camera_tokens = (per_view_for_head * view_joint_weights).sum(dim=2) / view_joint_weights.sum(dim=2).clamp_min(1.0)
+        elif view_mask is not None:
+            camera_tokens = per_view_tokens.mean(dim=1)
+            camera_tokens = camera_tokens * view_mask.bool().float().unsqueeze(-1)
+        else:
+            camera_tokens = per_view_tokens.mean(dim=1)
+        pred_camera_origin_delta = self.camera_delta_head(camera_tokens)
+        pred_camera_translation_delta = self.camera_translation_head(camera_tokens)
+        pred_camera_rotation_delta = self.camera_rotation_head(camera_tokens)
+        pred_camera_scale_delta = self.camera_scale_head(camera_tokens).squeeze(-1)
+
         joint_tokens = view_tokens[:, 0, :].reshape(batch, joints, self.d_model)
         for block in self.joint_blocks:
             joint_tokens = block(joint_tokens)
@@ -147,8 +190,13 @@ class StageARayFusionModel(nn.Module):
             "pred_3d": pred_3d,
             "pred_pose_root_relative": pred_pose_root_relative,
             "pred_pelvis": pred_pelvis,
+            "pred_camera_origin_delta": pred_camera_origin_delta,
+            "pred_camera_translation_delta": pred_camera_translation_delta,
+            "pred_camera_rotation_delta": pred_camera_rotation_delta,
+            "pred_camera_scale_delta": pred_camera_scale_delta,
             "joint_tokens": joint_tokens,
             "global_token": global_token,
+            "camera_tokens": camera_tokens,
         }
 
 
