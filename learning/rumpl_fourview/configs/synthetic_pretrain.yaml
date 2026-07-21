@@ -1,0 +1,46 @@
+﻿experiment:
+  name: rumpl_fourview_synthetic_pretrain
+  seed: 42
+  output_dir: outputs/learning/rumpl_fourview/synthetic_pretrain
+
+model:
+  input_dim: 7
+  max_views: 4
+  d_model: 64
+  num_heads: 8
+  view_fusion_depth: 4
+  joint_transformer_depth: 4
+  mlp_ratio: 2.0
+  dropout: 0.1
+
+data:
+  manifest_path: outputs/learning/rumpl_fourview/generated/manifest.json
+  batch_size: 16
+  num_workers: 0
+  train_split: train
+  val_split: val
+  root_relative: true
+
+camera_distribution:
+  horizontal_translation_m: 0.3
+  vertical_translation_m: 0.15
+  yaw_degrees: 10.0
+  pitch_degrees: 8.0
+  roll_degrees: 3.0
+  calibration_translation_noise_m: 0.03
+  calibration_rotation_noise_deg: 2.0
+
+synthetic_noise:
+  pixel_noise_std: 4.0
+  dropout_probability: 0.08
+  confidence_floor: 0.2
+  out_of_frame_confidence: 0.0
+
+training:
+  stage: synthetic_pretrain
+  epochs: 20
+  lr: 0.0003
+  weight_decay: 0.0001
+  grad_clip_norm: 1.0
+  device: cpu
+  log_every: 10

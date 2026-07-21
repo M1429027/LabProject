@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,7 @@ class KarateStageADataset(Dataset):
     def __len__(self) -> int:
         return len(self.entries)
 
+    @lru_cache(maxsize=None)
     def __getitem__(self, index: int) -> dict[str, Any]:
         entry = self.entries[index]
         path = Path(str(entry["path"]))
@@ -90,6 +92,70 @@ class KarateStageADataset(Dataset):
         }
 
 
+
+class KarateStageAClipDataset(Dataset):
+    """Group frames from one person and camera-noise variant into clips."""
+
+    def __init__(
+        self,
+        manifest_path: str | Path,
+        split: str,
+        clip_length: int,
+        clip_stride: int,
+    ):
+        self.frames = KarateStageADataset(manifest_path, split=split)
+        self.clip_length = int(clip_length)
+        self.clip_stride = int(clip_stride)
+        if self.clip_length < 2 or self.clip_stride < 1:
+            raise ValueError("clip_length must be >= 2 and clip_stride must be >= 1")
+
+        groups: dict[tuple[str, int, str], list[int]] = {}
+        for index, entry in enumerate(self.frames.entries):
+            key = (
+                str(entry["sequence"]),
+                int(entry.get("variant", 0)),
+                str(entry.get("person_id", "person_00")),
+            )
+            groups.setdefault(key, []).append(index)
+
+        self.clips: list[tuple[tuple[str, int, str], list[int]]] = []
+        for key, indexes in sorted(groups.items()):
+            indexes.sort(key=lambda idx: int(self.frames.entries[idx]["frame_id"]))
+            if len(indexes) <= self.clip_length:
+                padded = indexes + [indexes[-1]] * (self.clip_length - len(indexes))
+                self.clips.append((key, padded))
+                continue
+            starts = list(range(0, len(indexes) - self.clip_length + 1, self.clip_stride))
+            final_start = len(indexes) - self.clip_length
+            if starts[-1] != final_start:
+                starts.append(final_start)
+            for start in starts:
+                self.clips.append((key, indexes[start : start + self.clip_length]))
+
+    def __len__(self) -> int:
+        return len(self.clips)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        (sequence, variant, person_id), frame_indexes = self.clips[index]
+        frames = [self.frames[frame_index] for frame_index in frame_indexes]
+        center = dict(frames[len(frames) // 2])
+        for key in ("ray_tokens", "view_mask", "joint_view_mask"):
+            center[key] = torch.stack([frame[key] for frame in frames], dim=0)
+        for key in (
+            "camera_origin_delta",
+            "camera_translation_delta",
+            "camera_rotation_delta",
+            "camera_scale_delta",
+            "camera_origin_delta_valid",
+        ):
+            center[key] = frames[0][key]
+        center["sample_id"] = (
+            f"{sequence}_{person_id}_v{variant:02d}_clip_{index:05d}"
+        )
+        center["sequence"] = sequence
+        center["person_id"] = person_id
+        center["frame_id"] = [frame["frame_id"] for frame in frames]
+        return center
 def collate_stage_a(samples: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "ray_tokens": torch.stack([sample["ray_tokens"] for sample in samples], dim=0),
@@ -124,8 +190,24 @@ def build_stage_a_dataloaders(config: dict[str, Any]) -> tuple[DataLoader, DataL
     manifest_path = data_cfg["manifest_path"]
     batch_size = int(data_cfg.get("batch_size", 32))
     num_workers = int(data_cfg.get("num_workers", 0))
-    train_dataset = KarateStageADataset(manifest_path, split=data_cfg.get("train_split", "train"))
-    val_dataset = KarateStageADataset(manifest_path, split=data_cfg.get("val_split", "val"))
+    clip_length = int(data_cfg.get("clip_length", 1))
+    if clip_length > 1:
+        clip_stride = int(data_cfg.get("clip_stride", max(1, clip_length // 2)))
+        train_dataset = KarateStageAClipDataset(
+            manifest_path,
+            split=data_cfg.get("train_split", "train"),
+            clip_length=clip_length,
+            clip_stride=clip_stride,
+        )
+        val_dataset = KarateStageAClipDataset(
+            manifest_path,
+            split=data_cfg.get("val_split", "val"),
+            clip_length=clip_length,
+            clip_stride=clip_stride,
+        )
+    else:
+        train_dataset = KarateStageADataset(manifest_path, split=data_cfg.get("train_split", "train"))
+        val_dataset = KarateStageADataset(manifest_path, split=data_cfg.get("val_split", "val"))
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,

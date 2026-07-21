@@ -1,0 +1,22 @@
+﻿{
+  "schema_version": "rumpl_fourview_manifest_v1",
+  "description": "Example manifest for precomputed ray-token training samples.",
+  "entries": [
+    {
+      "id": "sample_train_000001",
+      "split": "train",
+      "path": "outputs/learning/rumpl_fourview/generated/train/sample_train_000001.npz",
+      "num_views": 4,
+      "num_joints": 17,
+      "feature_dim": 7
+    },
+    {
+      "id": "sample_val_000001",
+      "split": "val",
+      "path": "outputs/learning/rumpl_fourview/generated/val/sample_val_000001.npz",
+      "num_views": 3,
+      "num_joints": 17,
+      "feature_dim": 7
+    }
+  ]
+}

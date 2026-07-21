@@ -1,0 +1,31 @@
+board:
+  squares_x: 9
+  squares_y: 6
+  square_size_mm: 78.0
+  marker_size_mm: 58.0
+  aruco_dict: "DICT_4X4_50"
+  legacy_pattern: true
+
+input:
+  video: "../../../../camtest/cam2.mkv"
+  frame_step: 1
+  max_frames: 0
+
+intrinsics:
+  path: "calib_out_cam2/cam2_camtest_in_2026_04_16_intrinsics.npz"
+
+pose:
+  min_corners: 8
+  max_rms_px: 12.0
+  min_frames: 8
+
+roi:
+  enabled: true
+  x: 192
+  y: 54
+  w: 1536
+  h: 972
+
+output:
+  out_dir: "calib_out_cam2"
+  prefix: "cam2_from_newin_2026_04_16"

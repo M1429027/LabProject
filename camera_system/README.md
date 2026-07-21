@@ -1,18 +1,18 @@
-# camera_system
+﻿# camera_system
 
 Domain boundary for camera-side workflows.
 
 Scope:
-- capture / GUI / recording
+- camera capture / GUI / recording
 - intrinsics/extrinsics calibration
-- calibration debug tools
-
-Safe split note:
-- Existing code still lives under legacy paths during migration.
-- New camera-side tools should be placed under this domain.
+- camera and calibration debug tools
 
 Canonical path:
-- camera_system/camera_calibration/
+- `camera_system/camera_calibration/`
 
-Compatibility alias:
-- root camera_calibration -> camera_system/camera_calibration (symlink)
+Capture entry points:
+- RTSP dual-camera GUI: `camera_system/camera_calibration/capture/cam_gui.py`
+- USB webcam quad GUI: `camera_system/camera_calibration/capture/webcam_quad_gui.py`
+
+Webcam quad config:
+- `camera_system/camera_calibration/capture/config_camera_webcam_quad.yaml`

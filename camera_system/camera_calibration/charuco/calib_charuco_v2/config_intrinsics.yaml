@@ -1,8 +1,8 @@
-board:
-  squares_x: 10
-  squares_y: 7
-  square_size_mm: 25.0
-  marker_size_mm: 18.0
+﻿board:
+  squares_x: 9
+  squares_y: 6
+  square_size_mm: 55.0
+  marker_size_mm: 41.0
   aruco_dict: "DICT_4X4_50"
   legacy_pattern: true
 
@@ -25,3 +25,4 @@ roi:
 output:
   out_dir: "calib_out_cam2"
   prefix: "cam2"
+

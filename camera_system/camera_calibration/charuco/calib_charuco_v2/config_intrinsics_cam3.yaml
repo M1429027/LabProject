@@ -1,0 +1,27 @@
+﻿board:
+  squares_x: 9
+  squares_y: 6
+  square_size_mm: 55.0
+  marker_size_mm: 41.0
+  aruco_dict: "DICT_4X4_50"
+  legacy_pattern: true
+
+input:
+  video: "cam3.mkv"
+  image_dir: ""
+  frame_step: 5
+  max_frames: 300
+
+detector:
+  min_corners: 12
+
+roi:
+  enabled: true
+  x: 192
+  y: 54
+  w: 1536
+  h: 972
+
+output:
+  out_dir: "calib_out_cam3"
+  prefix: "cam3"

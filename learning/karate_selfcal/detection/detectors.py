@@ -191,6 +191,7 @@ class YOLOHRNetTopDownDetector(DetectorBackend):
         device: str | None = None,
         draw_annotations: bool = False,
         return_heatmaps: bool = False,
+        bbox_scale: float = 1.25,
     ) -> None:
         self.detector_model_path = str(detector_model_path)
         self.pose_config_path = str(pose_config_path)
@@ -201,6 +202,7 @@ class YOLOHRNetTopDownDetector(DetectorBackend):
         self.device = device
         self.draw_annotations = draw_annotations
         self.return_heatmaps = bool(return_heatmaps)
+        self.bbox_scale = max(float(bbox_scale), 1.0)
         self.detector = YOLO(self.detector_model_path)
 
         try:
@@ -257,6 +259,18 @@ class YOLOHRNetTopDownDetector(DetectorBackend):
             return []
 
         boxes_xyxy = result.boxes.xyxy.cpu().numpy()
+        if self.bbox_scale > 1.0 and len(boxes_xyxy):
+            centers = 0.5 * (boxes_xyxy[:, :2] + boxes_xyxy[:, 2:])
+            sizes = (boxes_xyxy[:, 2:] - boxes_xyxy[:, :2]) * self.bbox_scale
+            boxes_xyxy[:, :2] = centers - 0.5 * sizes
+            boxes_xyxy[:, 2:] = centers + 0.5 * sizes
+            height, width = frame.shape[:2]
+            boxes_xyxy[:, [0, 2]] = np.clip(
+                boxes_xyxy[:, [0, 2]], 0.0, float(width - 1)
+            )
+            boxes_xyxy[:, [1, 3]] = np.clip(
+                boxes_xyxy[:, [1, 3]], 0.0, float(height - 1)
+            )
         confs = None
         if result.boxes.conf is not None:
             confs = result.boxes.conf.cpu().numpy()
@@ -444,6 +458,7 @@ def build_detector(config: dict[str, Any], draw_annotations: bool = False) -> De
             device=device,
             draw_annotations=draw_annotations,
             return_heatmaps=bool(pose_cfg.get("return_heatmaps", False)),
+            bbox_scale=float(pose_cfg.get("bbox_scale", 1.25)),
         )
 
     raise ValueError(f"Unsupported detector backend: {backend}")

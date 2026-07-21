@@ -9,7 +9,7 @@ from typing import Any
 
 import torch
 
-from .dataset import KarateStageADataset, collate_stage_a
+from .dataset import KarateStageAClipDataset, KarateStageADataset, collate_stage_a
 from .model import build_model
 from .train import compute_extrinsic_refine_loss, compute_joint_finetune_loss, compute_loss, compute_motion_loss, compute_pelvis_loss, compute_triangulated_residual_loss, move_batch, resolve_device, select_target
 
@@ -33,7 +33,17 @@ def main() -> None:
     args = parse_args()
     checkpoint = torch.load(args.checkpoint, map_location="cpu")
     config: dict[str, Any] = checkpoint["config"]
-    dataset = KarateStageADataset(args.manifest, split=args.split)
+    data_cfg = config.get("data", {})
+    clip_length = int(data_cfg.get("clip_length", 1))
+    if clip_length > 1:
+        dataset = KarateStageAClipDataset(
+            args.manifest,
+            split=args.split,
+            clip_length=clip_length,
+            clip_stride=int(data_cfg.get("clip_stride", max(1, clip_length // 2))),
+        )
+    else:
+        dataset = KarateStageADataset(args.manifest, split=args.split)
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=int(args.batch_size),
@@ -64,6 +74,9 @@ def main() -> None:
         "camera_delta_loss": [],
         "camera_translation_delta_loss": [],
         "camera_rotation_delta_loss": [],
+        "camera_rotation_geodesic_loss": [],
+        "camera_rotation_relative_geodesic_loss": [],
+        "rotation_corrected_geometry_loss": [],
         "camera_scale_delta_loss": [],
     }
     with torch.no_grad():

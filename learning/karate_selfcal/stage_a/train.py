@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import json
 import random
 from pathlib import Path
@@ -214,6 +215,70 @@ def camera_rotation_delta_loss(outputs: dict[str, torch.Tensor], batch: dict[str
     return (err * weights).sum() / weights.sum().clamp_min(1.0)
 
 
+def skew_symmetric(vectors: torch.Tensor) -> torch.Tensor:
+    """Build batched skew-symmetric matrices for SO(3) operations."""
+
+    x, y, z = vectors.unbind(dim=-1)
+    zero = torch.zeros_like(x)
+    return torch.stack(
+        (zero, -z, y, z, zero, -x, -y, x, zero),
+        dim=-1,
+    ).reshape(vectors.shape[:-1] + (3, 3))
+
+
+def rotation_vector_to_matrix(rotation_vector: torch.Tensor) -> torch.Tensor:
+    """Map axis-angle vectors to rotation matrices with a stable exponential map."""
+
+    return torch.matrix_exp(skew_symmetric(rotation_vector))
+
+
+def rotation_geodesic_angle(estimated: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    """Return the SO(3) geodesic angle in radians."""
+
+    relative = estimated @ target.transpose(-1, -2)
+    skew_vector = torch.stack(
+        (
+            relative[..., 2, 1] - relative[..., 1, 2],
+            relative[..., 0, 2] - relative[..., 2, 0],
+            relative[..., 1, 0] - relative[..., 0, 1],
+        ),
+        dim=-1,
+    )
+    sine = 0.5 * torch.linalg.norm(skew_vector, dim=-1)
+    cosine = 0.5 * (
+        relative[..., 0, 0] + relative[..., 1, 1] + relative[..., 2, 2] - 1.0
+    )
+    return torch.atan2(sine, cosine.clamp(min=-1.0, max=1.0))
+
+
+def camera_rotation_geodesic_losses(
+    outputs: dict[str, torch.Tensor],
+    batch: dict[str, Any],
+    anchor_index: int = 0,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Supervise absolute and camera-to-anchor relative rotation corrections."""
+
+    if "pred_camera_rotation_delta" not in outputs or "camera_rotation_delta" not in batch:
+        zero = batch["ray_tokens"].new_tensor(0.0)
+        return zero, zero
+    mask = batch.get("camera_origin_delta_valid", batch["view_mask"]).bool()
+    predicted = rotation_vector_to_matrix(outputs["pred_camera_rotation_delta"])
+    target = rotation_vector_to_matrix(batch["camera_rotation_delta"])
+    absolute_loss = masked_mean(rotation_geodesic_angle(predicted, target), mask)
+
+    anchor_index = int(max(0, min(anchor_index, predicted.shape[1] - 1)))
+    predicted_anchor = predicted[:, anchor_index : anchor_index + 1]
+    target_anchor = target[:, anchor_index : anchor_index + 1]
+    predicted_relative = predicted_anchor.transpose(-1, -2) @ predicted
+    target_relative = target_anchor.transpose(-1, -2) @ target
+    relative_mask = mask & mask[:, anchor_index : anchor_index + 1]
+    relative_loss = masked_mean(
+        rotation_geodesic_angle(predicted_relative, target_relative),
+        relative_mask,
+    )
+    return absolute_loss, relative_loss
+
+
 def camera_scale_delta_loss(outputs: dict[str, torch.Tensor], batch: dict[str, Any]) -> torch.Tensor:
     if "pred_camera_scale_delta" not in outputs or "camera_scale_delta" not in batch:
         return batch["ray_tokens"].new_tensor(0.0)
@@ -223,6 +288,61 @@ def camera_scale_delta_loss(outputs: dict[str, torch.Tensor], batch: dict[str, A
     err = torch.abs(outputs["pred_camera_scale_delta"] - batch["camera_scale_delta"])
     weights = mask.float()
     return (err * weights).sum() / weights.sum().clamp_min(1.0)
+
+
+def camera_correction_gate_losses(
+    outputs: dict[str, torch.Tensor],
+    batch: dict[str, Any],
+    loss_cfg: dict[str, Any],
+) -> dict[str, torch.Tensor]:
+    """Supervise when each camera should remain unchanged or apply a correction."""
+
+    zero = batch["ray_tokens"].new_tensor(0.0)
+    required = (
+        "pred_camera_noop_probability" in outputs
+        and "pred_camera_correction_gate" in outputs
+        and "camera_origin_delta" in batch
+    )
+    if not required:
+        return {
+            "noop_gate_loss": zero,
+            "correction_gate_loss": zero,
+            "mean_noop_probability": zero,
+            "mean_correction_gate": zero,
+            "mean_effective_gate": zero,
+        }
+
+    valid = batch.get("camera_origin_delta_valid", batch["view_mask"]).bool()
+    origin_error = torch.linalg.norm(batch["camera_origin_delta"], dim=-1)
+    translation_error = torch.linalg.norm(batch["camera_translation_delta"], dim=-1)
+    rotation_error = torch.linalg.norm(batch["camera_rotation_delta"], dim=-1)
+    scale_error = torch.abs(batch["camera_scale_delta"])
+    origin_threshold = float(loss_cfg.get("camera_gate_origin_threshold", 0.03))
+    translation_threshold = float(loss_cfg.get("camera_gate_translation_threshold", 0.03))
+    rotation_threshold = math.radians(float(loss_cfg.get("camera_gate_rotation_threshold_deg", 1.5)))
+    scale_threshold = float(loss_cfg.get("camera_gate_scale_threshold", 0.03))
+    required_strength = torch.maximum(
+        torch.maximum(origin_error / max(origin_threshold, 1e-6), translation_error / max(translation_threshold, 1e-6)),
+        torch.maximum(rotation_error / max(rotation_threshold, 1e-6), scale_error / max(scale_threshold, 1e-6)),
+    )
+    correction_target = required_strength.clamp(0.0, 1.0)
+    noop_target = (required_strength <= float(loss_cfg.get("camera_noop_strength_threshold", 0.15))).float()
+    noop_prediction = outputs["pred_camera_noop_probability"].clamp(1e-5, 1.0 - 1e-5)
+    correction_prediction = outputs["pred_camera_correction_gate"]
+    noop_loss = masked_mean(
+        torch.nn.functional.binary_cross_entropy(noop_prediction, noop_target, reduction="none"), valid
+    )
+    correction_loss = masked_mean(
+        torch.nn.functional.smooth_l1_loss(correction_prediction, correction_target, reduction="none"), valid
+    )
+    effective = outputs.get("pred_camera_effective_gate", correction_prediction * (1.0 - noop_prediction))
+    return {
+        "noop_gate_loss": noop_loss,
+        "correction_gate_loss": correction_loss,
+        "mean_noop_probability": masked_mean(noop_prediction, valid),
+        "mean_correction_gate": masked_mean(correction_prediction, valid),
+        "mean_effective_gate": masked_mean(effective, valid),
+    }
 
 
 def compute_extrinsic_refine_loss(
@@ -235,12 +355,53 @@ def compute_extrinsic_refine_loss(
     origin_loss = camera_origin_delta_loss(outputs=outputs, batch=batch)
     translation_loss = camera_translation_delta_loss(outputs=outputs, batch=batch)
     rotation_loss = camera_rotation_delta_loss(outputs=outputs, batch=batch)
+    rotation_geodesic_loss, rotation_relative_geodesic_loss = camera_rotation_geodesic_losses(
+        outputs=outputs,
+        batch=batch,
+        anchor_index=int(loss_cfg.get("rotation_anchor_index", 0)),
+    )
     scale_loss = camera_scale_delta_loss(outputs=outputs, batch=batch)
+    raw_outputs = dict(outputs)
+    for key in (
+        "pred_camera_origin_delta",
+        "pred_camera_translation_delta",
+        "pred_camera_rotation_delta",
+        "pred_camera_scale_delta",
+    ):
+        raw_outputs[key] = outputs["raw_" + key]
+    raw_origin_loss = camera_origin_delta_loss(outputs=raw_outputs, batch=batch)
+    raw_translation_loss = camera_translation_delta_loss(outputs=raw_outputs, batch=batch)
+    raw_rotation_loss = camera_rotation_delta_loss(outputs=raw_outputs, batch=batch)
+    raw_rotation_geodesic_loss, _ = camera_rotation_geodesic_losses(
+        outputs=raw_outputs,
+        batch=batch,
+        anchor_index=int(loss_cfg.get("rotation_anchor_index", 0)),
+    )
+    gate_losses = camera_correction_gate_losses(outputs=outputs, batch=batch, loss_cfg=loss_cfg)
+    corrected_geometry_loss = batch["ray_tokens"].new_tensor(0.0)
+    if bool(loss_cfg.get("use_rotation_corrected_triangulation", False)):
+        corrected, corrected_valid = camera_corrected_triangulation(
+            outputs=outputs,
+            batch=batch,
+            apply_origin=bool(loss_cfg.get("apply_origin_correction", False)),
+            apply_rotation=True,
+        )
+        corrected_mask = corrected_valid & (batch["target_confidence"] > 0.0)
+        corrected_geometry_loss = mpjpe(corrected, batch["target_3d"], mask=corrected_mask)
     total = (
         float(loss_cfg.get("camera_delta_weight", 1.0)) * origin_loss
         + float(loss_cfg.get("camera_translation_delta_weight", 0.25)) * translation_loss
         + float(loss_cfg.get("camera_rotation_delta_weight", 1.0)) * rotation_loss
+        + float(loss_cfg.get("camera_rotation_geodesic_weight", 0.0)) * rotation_geodesic_loss
+        + float(loss_cfg.get("camera_rotation_relative_geodesic_weight", 0.0)) * rotation_relative_geodesic_loss
+        + float(loss_cfg.get("rotation_corrected_geometry_weight", 0.0)) * corrected_geometry_loss
         + float(loss_cfg.get("camera_scale_delta_weight", 0.5)) * scale_loss
+        + float(loss_cfg.get("camera_noop_gate_weight", 0.0)) * gate_losses["noop_gate_loss"]
+        + float(loss_cfg.get("camera_correction_gate_weight", 0.0)) * gate_losses["correction_gate_loss"]
+        + float(loss_cfg.get("raw_camera_delta_weight", 0.0)) * raw_origin_loss
+        + float(loss_cfg.get("raw_camera_translation_weight", 0.0)) * raw_translation_loss
+        + float(loss_cfg.get("raw_camera_rotation_weight", 0.0)) * raw_rotation_loss
+        + float(loss_cfg.get("raw_camera_rotation_geodesic_weight", 0.0)) * raw_rotation_geodesic_loss
     )
     zero = batch["ray_tokens"].new_tensor(0.0)
     return {
@@ -260,13 +421,22 @@ def compute_extrinsic_refine_loss(
         "camera_delta_loss": origin_loss,
         "camera_translation_delta_loss": translation_loss,
         "camera_rotation_delta_loss": rotation_loss,
+        "camera_rotation_geodesic_loss": rotation_geodesic_loss,
+        "camera_rotation_relative_geodesic_loss": rotation_relative_geodesic_loss,
+        "rotation_corrected_geometry_loss": corrected_geometry_loss,
         "camera_scale_delta_loss": scale_loss,
+        "raw_camera_delta_loss": raw_origin_loss,
+        "raw_camera_translation_loss": raw_translation_loss,
+        "raw_camera_rotation_loss": raw_rotation_loss,
+        "raw_camera_rotation_geodesic_loss": raw_rotation_geodesic_loss,
+        **gate_losses,
     }
-
 
 def camera_corrected_triangulation(
     outputs: dict[str, torch.Tensor],
     batch: dict[str, Any],
+    apply_origin: bool = True,
+    apply_rotation: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Triangulate joints again after applying predicted camera-center correction.
 
@@ -278,14 +448,23 @@ def camera_corrected_triangulation(
 
     ray_tokens = batch["ray_tokens"]
     joint_view_mask = batch["joint_view_mask"].bool()
+    if ray_tokens.ndim == 5:
+        # The temporal model predicts one correction for the center frame.
+        center_index = ray_tokens.shape[1] // 2
+        ray_tokens = ray_tokens[:, center_index]
+        joint_view_mask = joint_view_mask[:, center_index]
     origin_norm = ray_tokens[..., 0:3]
     direction = torch.nn.functional.normalize(ray_tokens[..., 3:6], dim=-1)
     confidence = ray_tokens[..., 8].clamp_min(0.0)
     scale = batch["ray_origin_scale"].reshape(-1, 1, 1, 1)
     center = batch["ray_origin_center"].reshape(-1, 1, 1, 3)
     origin = origin_norm * scale + center
-    if "pred_camera_origin_delta" in outputs:
+    if apply_origin and "pred_camera_origin_delta" in outputs:
         origin = origin + outputs["pred_camera_origin_delta"].unsqueeze(1) * scale
+    if apply_rotation and "pred_camera_rotation_delta" in outputs:
+        correction = rotation_vector_to_matrix(outputs["pred_camera_rotation_delta"]).unsqueeze(1)
+        direction = (correction @ direction.unsqueeze(-1)).squeeze(-1)
+        direction = torch.nn.functional.normalize(direction, dim=-1)
 
     weights = (confidence * joint_view_mask.float()).clamp_min(0.0)
     eye = torch.eye(3, dtype=ray_tokens.dtype, device=ray_tokens.device).reshape(1, 1, 1, 3, 3)
@@ -527,7 +706,19 @@ def run_epoch(
         "camera_delta_loss": [],
         "camera_translation_delta_loss": [],
         "camera_rotation_delta_loss": [],
+        "camera_rotation_geodesic_loss": [],
+        "camera_rotation_relative_geodesic_loss": [],
+        "rotation_corrected_geometry_loss": [],
         "camera_scale_delta_loss": [],
+        "noop_gate_loss": [],
+        "correction_gate_loss": [],
+        "mean_noop_probability": [],
+        "mean_correction_gate": [],
+        "mean_effective_gate": [],
+        "raw_camera_delta_loss": [],
+        "raw_camera_translation_loss": [],
+        "raw_camera_rotation_loss": [],
+        "raw_camera_rotation_geodesic_loss": [],
     }
     for batch in loader:
         batch = move_batch(batch, device)
@@ -652,6 +843,17 @@ def load_a3_pretrained(model: torch.nn.Module, training_cfg: dict[str, Any], dev
 
 def set_trainable_stage(model: torch.nn.Module, training_cfg: dict[str, Any], epoch: int) -> dict[str, Any]:
     """Apply A3 staged training schedule and report trainable parameter counts."""
+
+    trainable_prefixes = [str(value) for value in training_cfg.get("trainable_prefixes", [])]
+    if trainable_prefixes:
+        for name, parameter in model.named_parameters():
+            parameter.requires_grad = any(name.startswith(prefix) for prefix in trainable_prefixes)
+        return {
+            "stage": "selected_prefixes",
+            "trainable_prefixes": trainable_prefixes,
+            "trainable_parameters": int(sum(p.numel() for p in model.parameters() if p.requires_grad)),
+            "total_parameters": int(sum(p.numel() for p in model.parameters())),
+        }
 
     warmup_epochs = int(training_cfg.get("head_warmup_epochs", 0) or 0)
     head_only = epoch <= warmup_epochs

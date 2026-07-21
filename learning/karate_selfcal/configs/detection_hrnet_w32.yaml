@@ -13,6 +13,7 @@ pose:
   config_path: learning/karate_selfcal/checkpoints/hrnet_w32_coco_256x192/td-hm_hrnet-w32_8xb64-210e_coco-256x192.py
   checkpoint_path: learning/karate_selfcal/checkpoints/hrnet_w32_coco_256x192/td-hm_hrnet-w32_8xb64-210e_coco-256x192-81c58e40_20220909.pth
   return_heatmaps: true
+  bbox_scale: 1.25
 
 inputs:
   videos: []

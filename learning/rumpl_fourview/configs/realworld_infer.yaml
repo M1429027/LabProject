@@ -1,0 +1,6 @@
+﻿inference:
+  checkpoint_path: outputs/learning/rumpl_fourview/synthetic_pretrain/checkpoints/best.pt
+  device: cpu
+  confidence_threshold: 0.35
+  batch_size: 16
+  output_dir: outputs/reconstruction/rumpl_fourview_inference

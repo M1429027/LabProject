@@ -1,0 +1,33 @@
+experiment:
+  name: stage_a_harmony4d_karate_004_v2_camera_demo
+
+data:
+  manifest_path: outputs/karate_selfcal/harmony4d_karate_004_views_02_03_07_13_stage_a_selfrough_matched_2026_07_06/manifest.json
+  train_split: test
+  val_split: test
+  batch_size: 32
+  num_workers: 0
+  clip_length: 5
+  clip_stride: 3
+
+model:
+  input_dim: 11
+  num_joints: 17
+  max_views: 4
+  d_model: 96
+  num_heads: 8
+  view_depth: 3
+  joint_depth: 3
+  temporal_depth: 2
+  camera_depth: 2
+  mlp_ratio: 2.0
+  dropout: 0.1
+  camera_anchor_index: 0
+  fix_camera_anchor: true
+  minimum_active_correction: 0.20
+
+training:
+  device: cuda
+
+loss:
+  target_space: extrinsic_refine

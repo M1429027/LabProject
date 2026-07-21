@@ -1,0 +1,27 @@
+﻿ffmpeg:
+  ffmpeg_bin: ffmpeg
+  ffprobe_bin: ffprobe
+  rtbufsize: 512M
+
+capture:
+  width: 1280
+  height: 720
+  fps: 30
+  codec: libx264
+  preset: veryfast
+  pix_fmt: yuv420p
+
+# Prefer setting by exact device name shown from ffmpeg -list_devices.
+devices:
+  - name: Logitech Webcam 1
+  - name: Logitech Webcam 2
+  - name: Logitech Webcam 3
+  - name: Logitech Webcam 4
+
+output:
+  root: outputs/calibration
+  session_tag: webcam_quad
+
+sync_check:
+  frame_diff_tolerance: 1
+  duration_diff_tolerance_sec: 0.05

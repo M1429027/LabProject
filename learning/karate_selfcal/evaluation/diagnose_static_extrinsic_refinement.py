@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import io
@@ -36,7 +36,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--aggregation", choices=["mean", "median"], default="mean")
+    parser.add_argument(
+        "--aggregation",
+        choices=["mean", "median", "trimmed_mean", "weighted_mean", "weighted_trimmed_mean"],
+        default="mean",
+    )
+    parser.add_argument("--trim-ratio", type=float, default=0.15)
+    parser.add_argument("--max-delta-norm", type=float, default=0.0, help="Drop per-frame camera deltas above this norm in meters; 0 disables.")
+    parser.add_argument(
+        "--anchor-mode",
+        choices=["none", "relative"],
+        default="relative",
+        help="relative subtracts the anchor-view correction from every camera so the world origin is kept stable.",
+    )
     return parser.parse_args()
 
 
@@ -150,6 +162,75 @@ def triangulate_with_static_delta(batch: dict[str, Any], static_delta: torch.Ten
     return points, valid
 
 
+
+
+def aggregate_camera_deltas(
+    values: np.ndarray,
+    weights: np.ndarray,
+    method: str,
+    trim_ratio: float,
+    max_delta_norm: float,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    arr = np.asarray(values, dtype=np.float64)
+    w = np.asarray(weights, dtype=np.float64).reshape(-1)
+    if arr.size == 0:
+        return np.zeros(3, dtype=np.float64), {"num_samples": 0, "num_used": 0}
+    if arr.ndim != 2 or arr.shape[1] != 3:
+        raise ValueError(f"Expected camera delta array [N,3], got {arr.shape}")
+    if w.shape[0] != arr.shape[0]:
+        w = np.ones(arr.shape[0], dtype=np.float64)
+
+    norms = np.linalg.norm(arr, axis=1)
+    keep = np.isfinite(arr).all(axis=1) & np.isfinite(w) & (w > 0.0)
+    if max_delta_norm > 0.0:
+        keep &= norms <= float(max_delta_norm)
+    arr_kept = arr[keep]
+    w_kept = w[keep]
+    norms_kept = norms[keep]
+    if arr_kept.size == 0:
+        return np.zeros(3, dtype=np.float64), {
+            "num_samples": int(arr.shape[0]),
+            "num_after_norm_filter": 0,
+            "num_used": 0,
+            "num_rejected": int(arr.shape[0]),
+            "mean_sample_weight": float(np.mean(w)) if w.size else 0.0,
+        }
+
+    used_mask = np.ones(arr_kept.shape[0], dtype=bool)
+    if method in {"trimmed_mean", "weighted_trimmed_mean"} and arr_kept.shape[0] >= 5:
+        center = np.median(arr_kept, axis=0)
+        distances = np.linalg.norm(arr_kept - center.reshape(1, 3), axis=1)
+        ratio = float(np.clip(trim_ratio, 0.0, 0.49))
+        keep_count = max(int(round(arr_kept.shape[0] * (1.0 - ratio))), 1)
+        order = np.argsort(distances)
+        used_mask[:] = False
+        used_mask[order[:keep_count]] = True
+
+    arr_used = arr_kept[used_mask]
+    w_used = w_kept[used_mask]
+    if method in {"weighted_mean", "weighted_trimmed_mean"}:
+        value = np.average(arr_used, axis=0, weights=np.clip(w_used, 1e-6, None))
+    elif method == "median":
+        value = np.median(arr_used, axis=0)
+    else:
+        value = np.mean(arr_used, axis=0)
+
+    stats = {
+        "num_samples": int(arr.shape[0]),
+        "num_after_norm_filter": int(arr_kept.shape[0]),
+        "num_used": int(arr_used.shape[0]),
+        "num_rejected": int(arr.shape[0] - arr_used.shape[0]),
+        "static_delta_xyz_m": value.tolist(),
+        "std_delta_xyz_m": arr_used.std(axis=0).tolist(),
+        "mean_delta_norm_m": float(np.mean(norms_kept)) if norms_kept.size else 0.0,
+        "median_delta_norm_m": float(np.median(norms_kept)) if norms_kept.size else 0.0,
+        "max_delta_norm_m": float(np.max(norms_kept)) if norms_kept.size else 0.0,
+        "mean_sample_weight": float(np.mean(w_used)) if w_used.size else 0.0,
+        "median_sample_weight": float(np.median(w_used)) if w_used.size else 0.0,
+    }
+    return value.astype(np.float64), stats
+
+
 def corrected_payload_from_center_deltas(rough_payload: dict[str, Any], view_ids: list[str], center_delta_by_view: dict[str, np.ndarray]) -> dict[str, Any]:
     payload = json.loads(json.dumps(rough_payload))
     for view_id in view_ids:
@@ -224,39 +305,43 @@ def main() -> None:
     model.load_state_dict(checkpoint["model_state"], strict=False)
     model.eval()
 
-    # First pass: collect a single static correction per camera over the whole sequence.
+    # First pass: collect one camera-center correction per view. The cameras are static,
+    # so per-frame predictions are treated as noisy measurements of a sequence-level value.
     delta_by_view: dict[int, list[np.ndarray]] = defaultdict(list)
+    weight_by_view: dict[int, list[float]] = defaultdict(list)
     with torch.no_grad():
         for batch in loader:
             batch_dev = move_batch(batch, device)
             outputs = model(batch_dev["ray_tokens"], view_mask=batch_dev["view_mask"], joint_view_mask=batch_dev["joint_view_mask"])
             deltas = (outputs["pred_camera_origin_delta"] * batch_dev["ray_origin_scale"].reshape(-1, 1, 1)).detach().cpu().numpy()
             view_mask = batch_dev["view_mask"].detach().cpu().numpy().astype(bool)
+            joint_view_mask = batch_dev["joint_view_mask"].detach().cpu().numpy().astype(bool)
+            ray_conf = batch_dev["ray_tokens"][..., 8].detach().cpu().numpy()
+            sample_weights = (ray_conf * joint_view_mask).sum(axis=1) / joint_view_mask.sum(axis=1).clip(min=1)
             for sample_index in range(deltas.shape[0]):
                 for view_index in range(deltas.shape[1]):
                     if view_mask[sample_index, view_index]:
                         delta_by_view[view_index].append(deltas[sample_index, view_index].astype(np.float64))
+                        weight_by_view[view_index].append(float(sample_weights[sample_index, view_index]))
 
     static_np = []
     static_stats = {}
     for view_index, view_id in enumerate(args.view_ids):
         arr = np.asarray(delta_by_view.get(view_index, []), dtype=np.float64)
-        if arr.size == 0:
-            value = np.zeros(3, dtype=np.float64)
-            static_stats[view_id] = {"num_samples": 0}
-        else:
-            value = np.median(arr, axis=0) if args.aggregation == "median" else np.mean(arr, axis=0)
-            norms = np.linalg.norm(arr, axis=1)
-            static_stats[view_id] = {
-                "num_samples": int(arr.shape[0]),
-                "static_delta_xyz_m": value.tolist(),
-                "std_delta_xyz_m": arr.std(axis=0).tolist(),
-                "mean_delta_norm_m": float(norms.mean()),
-                "median_delta_norm_m": float(np.median(norms)),
-                "max_delta_norm_m": float(norms.max()),
-            }
+        weights = np.asarray(weight_by_view.get(view_index, []), dtype=np.float64)
+        value, stats = aggregate_camera_deltas(arr, weights, args.aggregation, args.trim_ratio, args.max_delta_norm)
+        static_stats[view_id] = stats
         static_np.append(value)
-    static_delta = torch.as_tensor(np.asarray(static_np, dtype=np.float32), device=device)
+
+    static_np = np.asarray(static_np, dtype=np.float64)
+    if args.anchor_mode == "relative":
+        anchor_index = args.view_ids.index(args.anchor_view) if args.anchor_view in args.view_ids else 0
+        anchor_delta = static_np[anchor_index].copy()
+        static_np = static_np - anchor_delta.reshape(1, 3)
+        for view_index, view_id in enumerate(args.view_ids):
+            static_stats[view_id]["anchor_relative_delta_xyz_m"] = static_np[view_index].tolist()
+        static_stats[args.anchor_view]["anchor_delta_removed_xyz_m"] = anchor_delta.tolist()
+    static_delta = torch.as_tensor(static_np.astype(np.float32), device=device)
 
     method_arrays: dict[str, dict[tuple[int, int], np.ndarray]] = {
         "rough_anchor": {},
@@ -318,6 +403,9 @@ def main() -> None:
     report = {
         "stage": "static_extrinsic_refinement_diagnostic",
         "aggregation": args.aggregation,
+        "trim_ratio": float(args.trim_ratio),
+        "max_delta_norm": float(args.max_delta_norm),
+        "anchor_mode": args.anchor_mode,
         "static_camera_correction_stats": static_stats,
         "camera_geometry": {
             "rough_vs_oracle": rough_geometry,

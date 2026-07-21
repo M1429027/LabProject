@@ -1,0 +1,31 @@
+﻿experiment:
+  name: rumpl_fourview_base
+  seed: 42
+  output_dir: outputs/learning/rumpl_fourview/base_run
+
+model:
+  input_dim: 7
+  max_views: 4
+  d_model: 64
+  num_heads: 8
+  view_fusion_depth: 4
+  joint_transformer_depth: 4
+  mlp_ratio: 2.0
+  dropout: 0.1
+
+data:
+  manifest_path: learning/rumpl_fourview/data/sample_manifest.json
+  batch_size: 8
+  num_workers: 0
+  train_split: train
+  val_split: val
+  root_relative: true
+
+training:
+  stage: base
+  epochs: 5
+  lr: 0.0003
+  weight_decay: 0.0001
+  grad_clip_norm: 1.0
+  device: cpu
+  log_every: 10

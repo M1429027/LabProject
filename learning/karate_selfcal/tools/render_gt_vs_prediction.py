@@ -124,6 +124,7 @@ def main() -> None:
                 title=f"GT 3D | frame {gt_frame['frame']}",
                 up_axis="z",
                 flip_up_axis=False,
+                highlight_key_joints=True,
             )
             prediction_image = viz.render_frame(
                 frame_data=prediction_frame,
@@ -133,6 +134,7 @@ def main() -> None:
                 title=f"Composed prediction | frame {prediction_frame['frame']}",
                 up_axis="z",
                 flip_up_axis=False,
+                highlight_key_joints=True,
             )
             writer.write(np.vstack([gt_image, prediction_image]))
     finally:
@@ -148,6 +150,7 @@ def main() -> None:
         "fps": float(args.fps),
         "size": [width, single_height * 2],
         "layout": "top=GT, bottom=composed prediction",
+        "key_joint_colors": "shoulders=cyan, wrists=red, hips=yellow, ankles=magenta",
         "axis_percentile": float(args.axis_percentile),
     }
     output_video.with_suffix(".summary.json").write_text(

@@ -21,8 +21,16 @@ Thumbs.db
 
 # Model weights / binaries
 *.pt
+*.pth
+*.ckpt
 *.onnx
 *.engine
+
+# Karate self-calibration generated artifacts
+learning/karate_selfcal/checkpoints/
+outputs/
+camera_system/camera_calibration/charuco/calib_charuco_v2/calib_out_*/
+camera_system/camera_calibration/charuco/calib_charuco_v2/temp_configs_*/
 
 # Large raw media
 *.mp4

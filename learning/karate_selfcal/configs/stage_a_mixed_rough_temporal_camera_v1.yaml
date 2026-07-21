@@ -1,0 +1,53 @@
+experiment:
+  name: stage_a_mixed_rough_temporal_camera_v1
+  seed: 42
+  output_dir: outputs/karate_selfcal/stage_a_mixed_rough_temporal_camera_v1_run_2026_07_14
+
+data:
+  manifest_path: outputs/karate_selfcal/amass_mixed_rough_quality_v2_full_2026_07_14/manifest.json
+  batch_size: 96
+  num_workers: 8
+  clip_length: 16
+  clip_stride: 8
+
+model:
+  input_dim: 11
+  num_joints: 17
+  max_views: 4
+  d_model: 96
+  num_heads: 8
+  view_depth: 3
+  joint_depth: 3
+  temporal_depth: 2
+  camera_depth: 2
+  mlp_ratio: 2.0
+  dropout: 0.1
+  camera_anchor_index: 0
+  fix_camera_anchor: true
+
+training:
+  device: cuda:0
+  epochs: 80
+  lr: 0.00006
+  weight_decay: 0.0001
+  grad_clip_norm: 1.0
+  selection_metric: loss
+  early_stop_patience: 14
+  early_stop_min_delta: 0.00003
+  pretrained_checkpoint: outputs/karate_selfcal/stage_a_mixed_rough_temporal_only_v1c_run_2026_07_14/checkpoints/best.pt
+  trainable_prefixes:
+    - camera_blocks
+    - camera_delta_head
+    - camera_rotation_head
+
+loss:
+  target_space: extrinsic_refine
+  camera_delta_weight: 1.0
+  camera_translation_delta_weight: 0.0
+  camera_rotation_delta_weight: 0.1
+  camera_rotation_geodesic_weight: 0.75
+  camera_rotation_relative_geodesic_weight: 1.0
+  camera_scale_delta_weight: 0.0
+  use_rotation_corrected_triangulation: false
+  rotation_corrected_geometry_weight: 0.0
+  rotation_anchor_index: 0

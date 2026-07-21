@@ -1,0 +1,61 @@
+experiment:
+  name: stage_a_physical3d_gated_extrinsic_refine_v2_expanded
+  seed: 719
+  output_dir: outputs/karate_selfcal/stage_a_physical3d_gated_extrinsic_refine_v2_expanded_run_2026_07_19
+
+data:
+  manifest_path: outputs/karate_selfcal/amass_longtele6m_diagonal45_hrnet_physical3d_camera_gated_expanded_fixed_2026_07_19/manifest.json
+  batch_size: 32
+  num_workers: 0
+  clip_length: 5
+  clip_stride: 3
+
+model:
+  input_dim: 11
+  num_joints: 17
+  max_views: 4
+  d_model: 96
+  num_heads: 8
+  view_depth: 3
+  joint_depth: 3
+  temporal_depth: 2
+  camera_depth: 2
+  mlp_ratio: 2.0
+  dropout: 0.1
+  camera_anchor_index: 0
+  fix_camera_anchor: true
+  minimum_active_correction: 0.20
+
+training:
+  device: cuda
+  epochs: 100
+  lr: 0.00010
+  weight_decay: 0.0001
+  grad_clip_norm: 1.0
+  selection_metric: loss
+  early_stop_patience: 20
+  early_stop_min_delta: 0.00003
+
+loss:
+  target_space: extrinsic_refine
+  camera_delta_weight: 1.0
+  camera_translation_delta_weight: 0.25
+  camera_rotation_delta_weight: 0.25
+  camera_rotation_geodesic_weight: 0.5
+  camera_rotation_relative_geodesic_weight: 0.5
+  camera_scale_delta_weight: 0.0
+  raw_camera_delta_weight: 0.35
+  raw_camera_translation_weight: 0.10
+  raw_camera_rotation_weight: 0.15
+  raw_camera_rotation_geodesic_weight: 0.25
+  use_rotation_corrected_triangulation: true
+  apply_origin_correction: true
+  rotation_corrected_geometry_weight: 0.20
+  rotation_anchor_index: 0
+  camera_noop_gate_weight: 1.0
+  camera_correction_gate_weight: 1.0
+  camera_gate_origin_threshold: 0.03
+  camera_gate_translation_threshold: 0.03
+  camera_gate_rotation_threshold_deg: 1.5
+  camera_gate_scale_threshold: 0.03
+  camera_noop_strength_threshold: 0.15

@@ -1,0 +1,13 @@
+﻿{
+  "schema_version": "rumpl_fourview_base_rig_v1",
+  "description": "Example schema for a four-camera base rig used by the synthetic camera sampler.",
+  "cameras": [
+    {
+      "name": "cam1",
+      "image_size": [1920, 1080],
+      "K": [[1400.0, 0.0, 960.0], [0.0, 1400.0, 540.0], [0.0, 0.0, 1.0]],
+      "R": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+      "t": [0.0, 0.0, 0.0]
+    }
+  ]
+}

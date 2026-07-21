@@ -1,0 +1,48 @@
+experiment:
+  name: stage_a_center_only_v1
+  seed: 42
+  output_dir: outputs/karate_selfcal/stage_a_center_only_v1_run_2026_07_14
+
+data:
+  manifest_path: outputs/karate_selfcal/amass_center_only_full_2026_07_14/manifest.json
+  batch_size: 256
+  num_workers: 0
+
+model:
+  input_dim: 11
+  num_joints: 17
+  max_views: 4
+  d_model: 96
+  num_heads: 8
+  view_depth: 3
+  joint_depth: 3
+  mlp_ratio: 2.0
+  dropout: 0.1
+
+training:
+  device: cuda
+  epochs: 80
+  lr: 0.00012
+  weight_decay: 0.0001
+  grad_clip_norm: 1.0
+  selection_metric: camera_delta_loss
+  early_stop_patience: 15
+  early_stop_min_delta: 0.00003
+  pretrained_checkpoint: outputs/karate_selfcal/stage_a_amass_yolo_extrinsic_only_refine_run/checkpoints/best.pt
+  trainable_prefixes:
+    - token_encoder
+    - fused_view_token
+    - view_blocks
+    - camera_delta_head
+
+loss:
+  target_space: extrinsic_refine
+  camera_delta_weight: 1.0
+  camera_translation_delta_weight: 0.0
+  camera_rotation_delta_weight: 0.0
+  camera_rotation_geodesic_weight: 0.0
+  camera_rotation_relative_geodesic_weight: 0.0
+  camera_scale_delta_weight: 0.0
+  use_rotation_corrected_triangulation: false
+  rotation_corrected_geometry_weight: 0.0
+  rotation_anchor_index: 0

@@ -45,6 +45,16 @@ TRACK_COLORS = [
     "#E74C3C",
     "#1ABC9C",
 ]
+KEY_JOINT_COLORS = {
+    5: "#00BCD4",
+    6: "#00BCD4",
+    9: "#FF3B30",
+    10: "#FF3B30",
+    11: "#FFD60A",
+    12: "#FFD60A",
+    15: "#FF2DCE",
+    16: "#FF2DCE",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,6 +93,11 @@ def parse_args() -> argparse.Namespace:
         "--mark-review-imputed",
         action="store_true",
         help="Render review-imputed joints with lighter markers and lines.",
+    )
+    parser.add_argument(
+        "--highlight-key-joints",
+        action="store_true",
+        help="Highlight shoulders, wrists, hips, and ankles with fixed colors.",
     )
     parser.add_argument(
         "--axis-percentile",
@@ -200,6 +215,7 @@ def render_frame(
     up_axis: str,
     flip_up_axis: bool,
     mark_review_imputed: bool = False,
+    highlight_key_joints: bool = False,
 ) -> np.ndarray:
     """Render one frame of triangulated identities."""
 
@@ -262,6 +278,22 @@ def render_frame(
             ys = [point[1] for point in coords.values()]
             zs = [point[2] for point in coords.values()]
             ax.scatter(xs, ys, zs, s=28, c=color, depthshade=True, label=f"id {identity_id}")
+
+        if highlight_key_joints:
+            for joint_id, highlight_color in KEY_JOINT_COLORS.items():
+                if joint_id not in coords:
+                    continue
+                point = coords[joint_id]
+                ax.scatter(
+                    [point[0]],
+                    [point[1]],
+                    [point[2]],
+                    s=62,
+                    c=highlight_color,
+                    edgecolors="black",
+                    linewidths=0.7,
+                    depthshade=False,
+                )
 
         for joint_a, joint_b in COCO_SKELETON_CONNECTIONS:
             if joint_a not in coords or joint_b not in coords:
@@ -376,6 +408,7 @@ def main() -> None:
                 up_axis=args.up_axis,
                 flip_up_axis=args.flip_up_axis,
                 mark_review_imputed=bool(args.mark_review_imputed),
+                highlight_key_joints=bool(args.highlight_key_joints),
             )
             writer.write(image)
     finally:
@@ -391,6 +424,7 @@ def main() -> None:
         "up_axis": args.up_axis,
         "flip_up_axis": bool(args.flip_up_axis),
         "mark_review_imputed": bool(args.mark_review_imputed),
+        "highlight_key_joints": bool(args.highlight_key_joints),
         "axis_percentile": args.axis_percentile,
     }
     with output_path.with_suffix(".summary.json").open("w", encoding="utf-8") as handle:

@@ -43,36 +43,42 @@ Multi-view videos
 -> global identity hypotheses
 -> geometry-based hypothesis selection
 -> relative pose estimation
--> rough triangulation
--> cheirality / scale checks
--> human-scale prior
--> joint-quality triangulation
--> bone prior + outlier filtering
--> pose-level candidate validation (next)
--> optimization-based pose refinement
--> transformer schema / dataset loader
--> SMPL (later)
+-> rough extrinsics
+-> learned camera refinement
+   -> rotation refinement
+   -> camera-center / translation refinement
+   -> scale / baseline normalization
+   -> mixed-noise joint fine-tuning
+-> refined-extrinsic triangulation
+-> joint-view masking + confidence-aware view selection
+-> robust joint triangulation and temporal completion
+-> residual 3D pose refinement
+-> SMPL / physics refinement (later)
 ```
 
-## Current Recommended Order Before Transformer
+## Current Training Strategy
 
-The project should not move directly into full Transformer training yet. The
-current blocker is unstable multi-view joint correspondence: people are mostly
-matched, but individual joints can still be mismatched across views.
+Stage A has shown that one mixed objective can make camera rotation,
+translation, scale, and 3D pose compete with each other. Camera refinement is
+therefore trained in a disentangled order before one final mixed-noise
+fine-tuning stage:
 
-Recommended order:
+1. train the rotation path with rotation-only camera noise
+2. train the camera-center / translation path with position-only noise
+3. validate scale and baseline normalization separately
+4. combine the initialized paths and fine-tune on mixed camera noise
+5. freeze the camera result for occlusion-aware combat triangulation
+6. apply residual and temporal 3D pose refinement after triangulation
 
-1. GT correspondence diagnostic using dataset `poses3d` / `smpl` as evaluation-only references.
-2. Convert GT findings into non-GT proxy rules for candidate scoring.
-3. Stable joint quality / inlier-view / candidate-3D output.
-4. Transformer token schema definition.
-5. Dataset loader for sequence-level refinement.
-6. Small Transformer baseline.
-7. Full refinement training only after the input quality is stable enough.
+The deployed system is still intended to use one integrated model. The
+disentangled datasets are a training and diagnosis strategy, not a requirement
+to run multiple manually selected models for different videos.
 
-The immediate next step is GT correspondence diagnostic. GT is not part of the
-runtime pipeline; it is used to identify which joints, view subsets, and scoring
-terms fail before those findings are translated into inference-time proxy rules.
+Generalization must be evaluated with sequence-level splits and camera/noise
+diversity. Training data should vary camera direction, elevation, focal length,
+baseline, perturbation magnitude, pose, body shape, missing joints, confidence,
+and available view count. Adjacent frames from the same motion must not be
+split across train and test.
 
 Current GT-based findings from `09_karate/004_karate`:
 
@@ -288,6 +294,67 @@ This supports the working hypothesis that root-relative pose and global pelvis
 translation interfere when trained naively as a single objective. The next step
 is A3 staged joint fine-tuning, where A1 initializes the pose branch and A2
 initializes the pelvis branch before producing one final checkpoint.
+
+## Stage A: Camera Rotation Refinement
+
+The camera branch predicts an axis-angle residual for each view from multi-view
+ray tokens. The corrected rotation is composed as:
+
+```text
+R_corrected = R_rough @ delta_R.T
+```
+
+The current rotation v2 training path makes the predicted correction affect
+both the camera loss and reconstructed geometry. It includes:
+
+- direct axis-angle residual supervision
+- absolute SO(3) geodesic loss against the clean camera rotation
+- anchor-relative SO(3) geodesic loss
+- triangulation loss after rotating the input rays with the predicted residual
+- selective training of the token encoder, view fusion blocks, and rotation head
+
+Current formal AMASS test result from
+`stage_a_amass_yolo_rotation_refinement_v2b_run`:
+
+| Metric | Result |
+|---|---:|
+| Rotation residual loss | 0.040864 rad |
+| Absolute SO(3) geodesic loss | 0.040862 rad |
+| Anchor-relative SO(3) geodesic loss | 0.041328 rad |
+| Rotation-corrected geometry MPJPE | 0.611754 m |
+
+The old extrinsic-only checkpoint has a rotation residual loss of `0.042298`
+rad on the same synthetic test path. Rotation v2 improves this value by about
+`3.4%`.
+
+Harmony4D `09_karate/004_karate`, views `02/03/07/13`, is used as a real-domain
+formal audit with 118 person-frames:
+
+| Variant | Mean non-anchor rotation error | Similarity-aligned MPJPE |
+|---|---:|---:|
+| Rough extrinsics | 3.433 deg | 0.1065 m |
+| Old extrinsic-only model, best rotation candidate | 1.742 deg | 0.0520 m |
+| Rotation v2b, best rotation candidate | 1.907 deg | 0.0526 m |
+
+The v2 implementation verifies the correct rotation composition and improves
+the synthetic AMASS test, but it does not outperform the older checkpoint on
+Harmony4D. This is treated as a domain/noise-disentanglement result rather than
+as a real-domain improvement. The current mixed-noise dataset contains rotation,
+translation, and scale errors at the same time, so geometry loss can pressure
+the rotation head to compensate for errors outside its responsibility.
+
+The next rotation experiment must use a clean rotation-only dataset:
+
+- keep the anchor camera fixed
+- preserve all camera centers and metric scale
+- perturb only non-anchor rotations over a realistic range
+- train with absolute and anchor-relative SO(3) losses
+- repeat the same 118 person-frame Harmony4D audit before proceeding to the
+  center / translation stage
+
+Review video with GT and fixed key-joint colors:
+
+- `outputs/karate_selfcal/harmony4d_karate_004_rotation_v2b_comparison_2026_07_13/gt_vs_rough_vs_old_rotation_vs_v2b_key_joints.mp4`
 ## Stage 1: Detection
 
 The current preferred frontend is:
@@ -615,6 +682,56 @@ Current 4B status:
 - 4B is complete enough for its current purpose: validating the pre-refinement
   upper bound before Stage 4C
 
+## Camera Refinement Ablation (2026-07-14)
+
+The camera-refinement experiment is now split into independently testable stages:
+
+1. Camera 0 is a hard gauge anchor. All center, translation, rotation, and scale
+   corrections for this view are multiplied by zero after the heads.
+2. Mixed rough-extrinsic training uses 50% geometry-pipeline rough cameras, 30%
+   empirical structured errors, and 20% independent random errors. Sequence-level
+   train/validation/test separation is preserved.
+3. Temporal aggregation processes 16 frames per clip for each camera before
+   predicting one static camera correction for the entire clip.
+4. Camera attention compares the four temporally aggregated camera tokens before
+   the correction heads. It is trained only after the temporal-only ablation.
+
+Test non-anchor errors (lower is better):
+
+| Model | Center error | Rotation error | Result vs zero correction |
+|---|---:|---:|---|
+| Per-frame mixed-noise | 0.02333 | 0.02160 | Worse |
+| Temporal-only | 0.02207 | 0.02076 | Worse |
+| Temporal + camera attention | 0.02154 | 0.02083 | Worse |
+
+Temporal aggregation reduces frame-to-frame correction variance and camera
+attention further lowers center error, but none of the learned variants yet beats
+the zero-correction baseline on the complete mixed test set. The remaining failure
+is a no-op / correction gate problem: large random errors improve slightly, while
+already accurate pipeline cameras are still over-corrected.
+
+## AMASS Local Occlusion Augmentation
+
+\`build_amass_observation_cache.py\` can apply one camera-local occluder before YOLO
+pose inference. The affected view rotates by frame across the four cameras. The
+default probability is zero, so existing clean-cache commands remain unchanged.
+
+\`\`\`bash
+python -m learning.karate_selfcal.stage_a.build_amass_observation_cache \
+  --source-glob '/home/yp8700/amass/workspace_archive/CMU_20260330_141025_wsl/**/*_poses.npz' \
+  --output-dir outputs/karate_selfcal/amass_occlusion_cache \
+  --rig-preset mixture \
+  --occlusion-probability 0.75 \
+  --device cuda \
+  --yolo-device 0
+\`\`\`
+
+Each sample records \`occlusion_view_mask\`, \`occlusion_boxes_xyxy\`, and
+\`occlusion_body_area_ratio\`. The verified smoke run rotates through cam1-cam4,
+keeps 14-17 confident YOLO joints per view, and covers about 3-10% of the projected
+person bounding box. GT keypoints are used only to position the synthetic object;
+YOLO confidence is not forcibly changed after inference.
+
 ## What Is Stable Right Now
 
 These parts are already usable as a baseline:
@@ -631,32 +748,37 @@ These parts are already usable as a baseline:
 - human-scale prior
 - joint-quality triangulation
 - bone-length prior and bone outlier filtering
+- Stage A ray-token dataloader and sequence-level train/val/test split
+- decoupled root-relative pose and pelvis translation baselines
+- residual 3D pose refinement on synthetic AMASS inputs
+- static camera-center correction diagnostic
+- learned camera-rotation residual path with SO(3) supervision
+- Harmony4D rough/reference extrinsic audit and GT comparison video
 
 ## What Comes Next
 
-The next implementation target is:
+The immediate target is a disentangled camera-refinement curriculum:
 
-`Stage 4C: optimization-based pose refinement`
+1. build a rotation-only AMASS dataset with a fixed anchor camera
+2. train Rotation v3 without translation or scale perturbations
+3. repeat the same Harmony4D 118 person-frame formal audit
+4. train camera-center / translation correction on position-only noise
+5. validate scale and baseline normalization separately
+6. combine the initialized camera paths with mixed-noise fine-tuning
 
-The current pre-refinement filters and constraints are at a reasonable baseline
-limit. Continuing to add more filters may make the sequence smoother, but will
-not reliably make it more human-shaped.
+Only after the refined extrinsics pass both direct camera-error and
+triangulation checks should the combat reconstruction branch continue with:
 
-Stage 4C should optimize an entire identity skeleton over a short temporal
-window with:
+- joint-view masks and confidence-aware observations
+- joint-level robust view subset selection
+- temporal completion for short occlusions
+- residual 3D pose refinement
+- later SMPL and physical/contact constraints
 
-- reprojection loss
-- bone length consistency
-- left/right symmetry
-- temporal smoothness
-- joint confidence weighting
-- robust outlier loss
-
-In parallel, the reference baseline can continue to:
-
-- camera bundle refinement
-- SMPL fitting
-- later transformer-based refinement
+Camera refinement and occlusion handling are separate responsibilities. Better
+extrinsics correct systematic ray geometry, while combat occlusion still
+requires missing-joint masks, correspondence checks, robust triangulation, and
+temporal recovery.
 
 ## Design Rules
 
