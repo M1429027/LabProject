@@ -47,6 +47,56 @@ cam3/cam4 left-right swap previously found for YOLO Pose.
 - Add bounded-gap interpolation and reject implausible learned bone priors.
 - Optionally refine small residual extrinsic errors using reliable torso trajectories.
 
+## Two-person demo extension
+
+The calibrated demo now has a two-person entry point:
+
+`camera_system/camera_calibration/charuco/calib_charuco_v2/run_demo_two_person_pipeline.py`
+
+It reuses the existing pose-aware Hungarian single-view tracker, tracklet merge,
+and two-person global assignment hypotheses.  The final cross-view identity is
+selected with the known global-axis camera geometry, then each identity is sent
+through the existing temporal 2D filter and robust 3D reconstruction separately.
+The two reconstructed skeletons are merged into one JSON/video with stable
+`identity_id` values.
+
+Recording requirements:
+
+- Both people should be visible long enough in every camera for two persistent
+  tracks to pass the configured coverage threshold.
+- Use only one designated synchronization performer for the opening/closing arm
+  peaks, or generate and verify the fixed eight-peak sync report before running
+  identity matching.
+- Feed the raw multi-person HRNet JSONs into this entry point.  Do not use the
+  old single-person filtered JSONs because those have already discarded the
+  second person.
+
+Example:
+
+```bash
+/home/yp8700/amass/.venv/bin/python \
+  camera_system/camera_calibration/charuco/calib_charuco_v2/run_demo_two_person_pipeline.py \
+  --line-dir camtest/line \
+  --pose-jsons \
+    camtest/line/two_person_hrnet/pose/keypoints_cam1demo.json \
+    camtest/line/two_person_hrnet/pose/keypoints_cam2demo.json \
+    camtest/line/two_person_hrnet/pose/keypoints_cam3demo.json \
+    camtest/line/two_person_hrnet/pose/keypoints_cam4demo.json \
+  --fixed-sync-report camtest/line/two_person_hrnet/motion_peak_sync_report.json \
+  --refined-extrinsics-dir camtest/line/baselines/2026-07-28_global-axes_hrnet-motion-peak/extrinsics \
+  --output-dir camtest/line/two_person_hrnet/reconstruction \
+  --save-tracked-videos \
+  --render-video
+```
+
+Primary review outputs:
+
+- `tracking/tracked_<camera>.mp4`: local track continuity and ID switches.
+- `identity_selection.json`: all eight global assignments and known-geometry scores.
+- `identity_0_3d/` and `identity_1_3d/`: per-person robust reconstruction diagnostics.
+- `triangulated_two_person_renderer_format.json`: merged two-person 3D result.
+- `triangulated_two_person.mp4`: merged two-person visualization.
+
 ## 論文規範
 
 目前的固定門檻主要用於 demo 防止數值爆炸，不能直接視為經過驗證的
