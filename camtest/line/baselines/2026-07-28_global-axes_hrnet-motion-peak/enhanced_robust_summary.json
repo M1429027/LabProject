@@ -1,0 +1,45 @@
+{
+  "stage": "enhanced_demo_robust_pipeline",
+  "num_frames": 533,
+  "valid_joints_per_frame_median": 17.0,
+  "selected_subset_counts": {
+    "cam1demo+cam3demo+cam4demo": 324,
+    "cam1demo+cam2demo+cam3demo+cam4demo": 157,
+    "cam1demo+cam2demo+cam3demo": 52
+  },
+  "root_range_m": [
+    1.5645769744697768,
+    1.2281255017101018,
+    0.061959771343812586
+  ],
+  "root_std_m": [
+    0.3554807522258077,
+    0.28708785986382807,
+    0.010558722756873017
+  ],
+  "bad_bones_per_frame_median": 0.0,
+  "bad_bones_per_frame_p90": 0.0,
+  "skeleton_optimization": {
+    "optimizer_success": true,
+    "method": "fast_bone_projection_ground_shift",
+    "bone_priors": {
+      "5-6": 0.35008010218940233,
+      "11-12": 0.23474763407932508,
+      "5-7": 0.2766696162733897,
+      "7-9": 0.22906190019227343,
+      "6-8": 0.28585110564488264,
+      "8-10": 0.2343870648832773,
+      "11-13": 0.3713047738674625,
+      "13-15": 0.37220979920590985,
+      "12-14": 0.37180623474154467,
+      "14-16": 0.3807454823891631,
+      "5-11": 0.5440930594167004,
+      "6-12": 0.5406039035532879
+    },
+    "bad_bone_count_before_projection": 0,
+    "bad_bone_count_after_projection": 0,
+    "global_ground_z_shift_m": 0.06285357403985986,
+    "temporal_joint_gate_rejected": 0,
+    "max_joint_jump_m": 0.95
+  }
+}

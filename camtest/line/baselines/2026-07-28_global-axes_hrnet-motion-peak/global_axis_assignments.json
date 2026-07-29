@@ -1,0 +1,201 @@
+{
+  "schema": "global_floor_axis_anchors_v1",
+  "spacing_m": 1.52,
+  "definition": {
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "plus_x": [
+      1.52,
+      0,
+      0
+    ],
+    "plus_y": [
+      0,
+      1.52,
+      0
+    ],
+    "plus_x_landmark": "",
+    "plus_y_landmark": ""
+  },
+  "cameras": {
+    "cam1": {
+      "center": {
+        "marker_id": "M05",
+        "source_id": "P04",
+        "image_xy_px": [
+          994.56,
+          718.848
+        ],
+        "previous_world_label": "center",
+        "previous_world_xyz_m": [
+          0,
+          0,
+          0
+        ]
+      },
+      "plus_x": {
+        "marker_id": "M04",
+        "source_id": "P03",
+        "image_xy_px": [
+          1568,
+          950.528
+        ],
+        "previous_world_label": "right",
+        "previous_world_xyz_m": [
+          1.52,
+          0,
+          0
+        ]
+      },
+      "plus_y": {
+        "marker_id": "M02",
+        "source_id": "P01",
+        "image_xy_px": [
+          1328.64,
+          572.928
+        ],
+        "previous_world_label": "top",
+        "previous_world_xyz_m": [
+          0,
+          1.52,
+          0
+        ]
+      }
+    },
+    "cam2": {
+      "center": {
+        "marker_id": "M05",
+        "source_id": "P04",
+        "image_xy_px": [
+          823.04,
+          752.128
+        ],
+        "previous_world_label": "center",
+        "previous_world_xyz_m": [
+          0,
+          0,
+          0
+        ]
+      },
+      "plus_x": {
+        "marker_id": "M02",
+        "source_id": "P01",
+        "image_xy_px": [
+          1198.08,
+          593.408
+        ],
+        "previous_world_label": "top",
+        "previous_world_xyz_m": [
+          0,
+          1.52,
+          0
+        ]
+      },
+      "plus_y": {
+        "marker_id": "M04",
+        "source_id": "P03",
+        "image_xy_px": [
+          509.44,
+          598.528
+        ],
+        "previous_world_label": "left",
+        "previous_world_xyz_m": [
+          -1.52,
+          0,
+          0
+        ]
+      }
+    },
+    "cam3": {
+      "center": {
+        "marker_id": "M05",
+        "source_id": "P04",
+        "image_xy_px": [
+          608,
+          394.6
+        ],
+        "previous_world_label": "center",
+        "previous_world_xyz_m": [
+          0,
+          0,
+          0
+        ]
+      },
+      "plus_x": {
+        "marker_id": "M06",
+        "source_id": "P05",
+        "image_xy_px": [
+          404,
+          333.6
+        ],
+        "previous_world_label": "left",
+        "previous_world_xyz_m": [
+          -1.52,
+          0,
+          0
+        ]
+      },
+      "plus_y": {
+        "marker_id": "M08",
+        "source_id": "P07",
+        "image_xy_px": [
+          439,
+          536.6
+        ],
+        "previous_world_label": "bottom",
+        "previous_world_xyz_m": [
+          0,
+          -1.52,
+          0
+        ]
+      }
+    },
+    "cam4": {
+      "center": {
+        "marker_id": "M01",
+        "source_id": "P00",
+        "image_xy_px": [
+          823.04,
+          711.168
+        ],
+        "previous_world_label": "center",
+        "previous_world_xyz_m": [
+          0,
+          0,
+          0
+        ]
+      },
+      "plus_x": {
+        "marker_id": "M07",
+        "source_id": "P06",
+        "image_xy_px": [
+          350.72,
+          880.128
+        ],
+        "previous_world_label": "bottom",
+        "previous_world_xyz_m": [
+          0,
+          -1.52,
+          0
+        ]
+      },
+      "plus_y": {
+        "marker_id": "M06",
+        "source_id": "P05",
+        "image_xy_px": [
+          1182.72,
+          909.568
+        ],
+        "previous_world_label": "right",
+        "previous_world_xyz_m": [
+          1.52,
+          0,
+          0
+        ]
+      }
+    }
+  }
+}

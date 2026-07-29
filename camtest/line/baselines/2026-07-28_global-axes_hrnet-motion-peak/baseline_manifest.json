@@ -1,0 +1,42 @@
+{
+  "baseline_id": "2026-07-28_global-axes_hrnet-motion-peak",
+  "status": "verified_correct_demo_baseline",
+  "recorded_at": "2026-07-29T00:00:00+08:00",
+  "progress_date": "2026-07-28",
+  "git": {
+    "branch": "agent/3d-pose-global-axis-baseline",
+    "base": "origin/main",
+    "note": "Calibration/demo scripts and the verified runtime artifacts are frozen together on an independent demo branch."
+  },
+  "configuration": {
+    "sync": "explicit_8_motion_peak_affine",
+    "pose_2d": "HRNet filtered tracks",
+    "camera_lr_swap": [],
+    "global_axis_rotations_deg": {
+      "cam1": 0,
+      "cam2": 90,
+      "cam3": 180,
+      "cam4": 270
+    },
+    "extrinsics_dir": "camtest/line/baselines/2026-07-28_global-axes_hrnet-motion-peak/extrinsics"
+  },
+  "verification": {
+    "epipolar_median_px": 5.7515069549563265,
+    "torso_center_epipolar_median_px": 4.94,
+    "num_frames": 533,
+    "empty_subset_frames": 0,
+    "temporal_joint_gate_rejected": 0,
+    "bad_bones_before_projection": 0,
+    "bad_bones_after_projection": 0,
+    "root_range_m": [
+      1.5645769744697768,
+      1.2281255017101018,
+      0.061959771343812586
+    ]
+  },
+  "canonical_outputs": {
+    "triangulated_json": "camtest/line/demo_hrnet_enhanced_20260728/robust_3d_global_axes_motion_peak_noswap_20260729/triangulated_enhanced_robust.json",
+    "video": "camtest/line/demo_hrnet_enhanced_20260728/robust_3d_global_axes_motion_peak_noswap_20260729/triangulated_hrnet_global_axes_motion_peak_noswap_fixed_axis_95.mp4",
+    "comparison_video": "camtest/line/demo_hrnet_enhanced_20260728/robust_3d_global_axes_motion_peak_noswap_20260729/comparison_wrong_xy_vs_global_xy_3d.mp4"
+  }
+}

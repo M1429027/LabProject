@@ -1,0 +1,181 @@
+{
+  "stage": "apply_global_floor_axis_mapping",
+  "assignment_file": "camtest/line/global_axis_assignments.json",
+  "source_extrinsics_dir": "camtest/line/line_refine_20260728",
+  "output_dir": "camtest/line/line_refine_global_axes_20260729",
+  "cameras": {
+    "cam1": {
+      "basis_old_from_global": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "determinant": 1.0,
+      "camera_center_old_m": [
+        2.381567643323151,
+        -2.6807639119613533,
+        1.6757523906441274
+      ],
+      "camera_center_global_m": [
+        2.381567643323151,
+        -2.6807639119613533,
+        1.6757523906441274
+      ],
+      "forward_old_world": [
+        -0.6644856853554886,
+        0.6748821026738914,
+        -0.320925102552159
+      ],
+      "forward_global_world": [
+        -0.6644856853554886,
+        0.6748821026738914,
+        -0.320925102552159
+      ],
+      "output_npz": "camtest/line/line_refine_global_axes_20260729/cam1_line_extrinsics_refined.npz"
+    },
+    "cam2": {
+      "basis_old_from_global": [
+        [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "determinant": 1.0,
+      "camera_center_old_m": [
+        2.634575318565596,
+        -2.1958021980188724,
+        1.659041762131221
+      ],
+      "camera_center_global_m": [
+        -2.1958021980188724,
+        -2.634575318565596,
+        1.659041762131221
+      ],
+      "forward_old_world": [
+        -0.7194049621277425,
+        0.6446728324334197,
+        -0.2585603209857491
+      ],
+      "forward_global_world": [
+        0.6446728324334197,
+        0.7194049621277425,
+        -0.2585603209857491
+      ],
+      "output_npz": "camtest/line/line_refine_global_axes_20260729/cam2_line_extrinsics_refined.npz"
+    },
+    "cam3": {
+      "basis_old_from_global": [
+        [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "determinant": 1.0,
+      "camera_center_old_m": [
+        1.7133925725686256,
+        -3.518477765564192,
+        2.0826287585941143
+      ],
+      "camera_center_global_m": [
+        -1.7133925725686256,
+        3.518477765564192,
+        2.0826287585941143
+      ],
+      "forward_old_world": [
+        -0.36283147528181514,
+        0.8276794749996595,
+        -0.4281355009913447
+      ],
+      "forward_global_world": [
+        0.36283147528181514,
+        -0.8276794749996595,
+        -0.4281355009913447
+      ],
+      "output_npz": "camtest/line/line_refine_global_axes_20260729/cam3_line_extrinsics_refined.npz"
+    },
+    "cam4": {
+      "basis_old_from_global": [
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "determinant": 1.0,
+      "camera_center_old_m": [
+        3.5046159970099082,
+        -2.377927612045946,
+        2.011364302948791
+      ],
+      "camera_center_global_m": [
+        2.377927612045946,
+        3.5046159970099082,
+        2.011364302948791
+      ],
+      "forward_old_world": [
+        -0.7275575211852368,
+        0.6061650536255877,
+        -0.32128489091440693
+      ],
+      "forward_global_world": [
+        -0.6061650536255877,
+        -0.7275575211852368,
+        -0.32128489091440693
+      ],
+      "output_npz": "camtest/line/line_refine_global_axes_20260729/cam4_line_extrinsics_refined.npz"
+    }
+  },
+  "pair_distances_global_m": {
+    "cam1+cam2": 4.577633372791302,
+    "cam1+cam3": 7.440755668942661,
+    "cam1+cam4": 6.194479253643024,
+    "cam2+cam3": 6.18645352737888,
+    "cam2+cam4": 7.663733134542291,
+    "cam3+cam4": 4.091964274563073
+  },
+  "note": "This is an exact world-basis change; per-camera image reprojection is unchanged."
+}

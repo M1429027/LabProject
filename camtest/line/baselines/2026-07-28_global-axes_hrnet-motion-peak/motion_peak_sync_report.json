@@ -1,0 +1,613 @@
+{
+  "mode": "explicit_8_motion_peak_affine_sync",
+  "definition": "local_frame = a * reference_frame + b",
+  "reference": "cam1demo",
+  "reference_interval_frames": [
+    230,
+    762
+  ],
+  "coarse_anchor_source": "camtest/line/demo_armspread_sync_triangulation/aligned_armspread_v1/sync_report.json",
+  "coarse_anchor_usage": "search windows only; affine fit uses detected velocity peaks",
+  "event_order": [
+    "start_1_open",
+    "start_1_close",
+    "start_2_open",
+    "start_2_close",
+    "end_1_open",
+    "end_1_close",
+    "end_2_open",
+    "end_2_close"
+  ],
+  "detected_events": {
+    "cam1demo": [
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 241,
+        "frame_integer": 231,
+        "frame_subpixel": 230.99706763822786,
+        "velocity": 0.475758590337202,
+        "strength_over_local_median": 9.73470417060255,
+        "search_window": [
+          216,
+          251
+        ],
+        "event_name": "start_1_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 241,
+        "frame_integer": 251,
+        "frame_subpixel": 251.40168707165034,
+        "velocity": -0.3236351899134182,
+        "strength_over_local_median": 6.622040877435203,
+        "search_window": [
+          238,
+          265
+        ],
+        "event_name": "start_1_close"
+      },
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 291,
+        "frame_integer": 282,
+        "frame_subpixel": 281.55900987305176,
+        "velocity": 0.39915169375121917,
+        "strength_over_local_median": 7.974148825734437,
+        "search_window": [
+          266,
+          301
+        ],
+        "event_name": "start_2_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 291,
+        "frame_integer": 303,
+        "frame_subpixel": 303.4505072137966,
+        "velocity": -0.44289842691367043,
+        "strength_over_local_median": 8.848109694091676,
+        "search_window": [
+          289,
+          316
+        ],
+        "event_name": "start_2_close"
+      },
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 701,
+        "frame_integer": 693,
+        "frame_subpixel": 693.3398354064828,
+        "velocity": 0.44383562707805413,
+        "strength_over_local_median": 10.37278649307503,
+        "search_window": [
+          676,
+          711
+        ],
+        "event_name": "end_1_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 701,
+        "frame_integer": 710,
+        "frame_subpixel": 709.8513901224827,
+        "velocity": -0.43589937054705385,
+        "strength_over_local_median": 10.187309957330726,
+        "search_window": [
+          701,
+          728
+        ],
+        "event_name": "end_1_close"
+      },
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 751,
+        "frame_integer": 740,
+        "frame_subpixel": 739.7871170837708,
+        "velocity": 0.48292481157255507,
+        "strength_over_local_median": 11.286331373685911,
+        "search_window": [
+          726,
+          761
+        ],
+        "event_name": "end_2_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 751,
+        "frame_integer": 761,
+        "frame_subpixel": 761.080637610413,
+        "velocity": -0.45803847536858855,
+        "strength_over_local_median": 10.704718190133995,
+        "search_window": [
+          747,
+          774
+        ],
+        "event_name": "end_2_close"
+      }
+    ],
+    "cam2demo": [
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 244,
+        "frame_integer": 232,
+        "frame_subpixel": 232.34086985248877,
+        "velocity": 0.44989909151506,
+        "strength_over_local_median": 8.678402466678618,
+        "search_window": [
+          219,
+          254
+        ],
+        "event_name": "start_1_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 244,
+        "frame_integer": 252,
+        "frame_subpixel": 252.38943978664426,
+        "velocity": -0.35351195643716915,
+        "strength_over_local_median": 6.819126983371596,
+        "search_window": [
+          240,
+          267
+        ],
+        "event_name": "start_1_close"
+      },
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 290,
+        "frame_integer": 283,
+        "frame_subpixel": 283.12633865933503,
+        "velocity": 0.5087008823628651,
+        "strength_over_local_median": 12.228894736362177,
+        "search_window": [
+          265,
+          300
+        ],
+        "event_name": "start_2_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 290,
+        "frame_integer": 303,
+        "frame_subpixel": 303.2621480113622,
+        "velocity": -0.4634622631443637,
+        "strength_over_local_median": 11.141382739387096,
+        "search_window": [
+          291,
+          318
+        ],
+        "event_name": "start_2_close"
+      },
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 702,
+        "frame_integer": 696,
+        "frame_subpixel": 695.545588951129,
+        "velocity": 0.4078249945187371,
+        "strength_over_local_median": 8.161630212689065,
+        "search_window": [
+          677,
+          712
+        ],
+        "event_name": "end_1_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 702,
+        "frame_integer": 710,
+        "frame_subpixel": 710.105829490825,
+        "velocity": -0.4144007061615018,
+        "strength_over_local_median": 8.293227166124575,
+        "search_window": [
+          703,
+          730
+        ],
+        "event_name": "end_1_close"
+      },
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 751,
+        "frame_integer": 742,
+        "frame_subpixel": 742.1538450283183,
+        "velocity": 0.3992123809485242,
+        "strength_over_local_median": 6.540470920707684,
+        "search_window": [
+          726,
+          761
+        ],
+        "event_name": "end_2_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 751,
+        "frame_integer": 761,
+        "frame_subpixel": 760.9893282529736,
+        "velocity": -0.4255341769673352,
+        "strength_over_local_median": 6.971712409342856,
+        "search_window": [
+          750,
+          777
+        ],
+        "event_name": "end_2_close"
+      }
+    ],
+    "cam3demo": [
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 230,
+        "frame_integer": 216,
+        "frame_subpixel": 215.6006979075744,
+        "velocity": 0.4261852957795156,
+        "strength_over_local_median": 8.066700024963575,
+        "search_window": [
+          205,
+          240
+        ],
+        "event_name": "start_1_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 230,
+        "frame_integer": 238,
+        "frame_subpixel": 238.49856601557966,
+        "velocity": -0.401399683754601,
+        "strength_over_local_median": 7.597565826482095,
+        "search_window": [
+          223,
+          250
+        ],
+        "event_name": "start_1_close"
+      },
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 282,
+        "frame_integer": 266,
+        "frame_subpixel": 266.3831686653284,
+        "velocity": 0.4271843144836338,
+        "strength_over_local_median": 20.39103758020038,
+        "search_window": [
+          257,
+          292
+        ],
+        "event_name": "start_2_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 282,
+        "frame_integer": 290,
+        "frame_subpixel": 290.0475175285004,
+        "velocity": -0.3984799727743016,
+        "strength_over_local_median": 19.020876526376547,
+        "search_window": [
+          274,
+          301
+        ],
+        "event_name": "start_2_close"
+      },
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 688,
+        "frame_integer": 679,
+        "frame_subpixel": 679.4893363949228,
+        "velocity": 0.42905528650861535,
+        "strength_over_local_median": 10.475064775005302,
+        "search_window": [
+          663,
+          698
+        ],
+        "event_name": "end_1_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 688,
+        "frame_integer": 696,
+        "frame_subpixel": 695.9974151067963,
+        "velocity": -0.4484876241253116,
+        "strength_over_local_median": 10.949490802758204,
+        "search_window": [
+          687,
+          714
+        ],
+        "event_name": "end_1_close"
+      },
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 738,
+        "frame_integer": 727,
+        "frame_subpixel": 726.5858951172121,
+        "velocity": 0.37277799864727834,
+        "strength_over_local_median": 12.738409031303378,
+        "search_window": [
+          713,
+          748
+        ],
+        "event_name": "end_2_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 738,
+        "frame_integer": 747,
+        "frame_subpixel": 746.5279158395373,
+        "velocity": -0.39738640985292806,
+        "strength_over_local_median": 13.57931704810048,
+        "search_window": [
+          734,
+          761
+        ],
+        "event_name": "end_2_close"
+      }
+    ],
+    "cam4demo": [
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 164,
+        "frame_integer": 157,
+        "frame_subpixel": 156.74214841332113,
+        "velocity": 0.4174886427308644,
+        "strength_over_local_median": 6.368368562169842,
+        "search_window": [
+          139,
+          174
+        ],
+        "event_name": "start_1_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 164,
+        "frame_integer": 179,
+        "frame_subpixel": 178.59764407916268,
+        "velocity": -0.3921000805162762,
+        "strength_over_local_median": 5.981091628386743,
+        "search_window": [
+          164,
+          191
+        ],
+        "event_name": "start_1_close"
+      },
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 213,
+        "frame_integer": 207,
+        "frame_subpixel": 207.10994178746816,
+        "velocity": 0.4608892328045875,
+        "strength_over_local_median": 12.954941951799341,
+        "search_window": [
+          188,
+          223
+        ],
+        "event_name": "start_2_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 213,
+        "frame_integer": 231,
+        "frame_subpixel": 230.87214340324184,
+        "velocity": -0.378355924079371,
+        "strength_over_local_median": 10.635047826439182,
+        "search_window": [
+          215,
+          242
+        ],
+        "event_name": "start_2_close"
+      },
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 626,
+        "frame_integer": 619,
+        "frame_subpixel": 619.0629284454989,
+        "velocity": 0.46456979364756434,
+        "strength_over_local_median": 8.354203457645008,
+        "search_window": [
+          601,
+          636
+        ],
+        "event_name": "end_1_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 626,
+        "frame_integer": 635,
+        "frame_subpixel": 635.0969453164278,
+        "velocity": -0.39930692895241504,
+        "strength_over_local_median": 7.180603156146169,
+        "search_window": [
+          627,
+          654
+        ],
+        "event_name": "end_1_close"
+      },
+      {
+        "kind": "open_velocity_positive",
+        "coarse_anchor_frame": 674,
+        "frame_integer": 667,
+        "frame_subpixel": 667.3799984721671,
+        "velocity": 0.46360123640863204,
+        "strength_over_local_median": 22.929435351258864,
+        "search_window": [
+          649,
+          684
+        ],
+        "event_name": "end_2_open"
+      },
+      {
+        "kind": "close_velocity_negative",
+        "coarse_anchor_frame": 674,
+        "frame_integer": 687,
+        "frame_subpixel": 687.1396312312571,
+        "velocity": -0.41403588412355796,
+        "strength_over_local_median": 20.477963155698912,
+        "search_window": [
+          675,
+          702
+        ],
+        "event_name": "end_2_close"
+      }
+    ]
+  },
+  "affine_local_frame=a_ref_frame_plus_b": {
+    "cam1demo": {
+      "a": 1.0,
+      "b": -6.214544812075546e-14,
+      "residual_frames_local_minus_predicted": [
+        5.684341886080802e-14,
+        5.684341886080802e-14,
+        5.684341886080802e-14,
+        5.684341886080802e-14,
+        1.1368683772161603e-13,
+        1.1368683772161603e-13,
+        1.1368683772161603e-13,
+        1.1368683772161603e-13
+      ],
+      "residual_rms_frames": 8.987733679556355e-14,
+      "residual_median_abs_frames": 8.526512829121202e-14,
+      "residual_max_abs_frames": 1.1368683772161603e-13,
+      "equiv_offset_at_first_event": -5.684341886080802e-14,
+      "equiv_offset_at_last_event": -1.1368683772161603e-13,
+      "drift_across_events_frames": 0.0,
+      "optimizer_success": true,
+      "events_local": [
+        230.99706763822786,
+        251.40168707165034,
+        281.55900987305176,
+        303.4505072137966,
+        693.3398354064828,
+        709.8513901224827,
+        739.7871170837708,
+        761.080637610413
+      ],
+      "events_ref": [
+        230.99706763822786,
+        251.40168707165034,
+        281.55900987305176,
+        303.4505072137966,
+        693.3398354064828,
+        709.8513901224827,
+        739.7871170837708,
+        761.080637610413
+      ]
+    },
+    "cam2demo": {
+      "a": 0.9999147220430162,
+      "b": 1.112636279257223,
+      "residual_frames_local_minus_predicted": [
+        0.2508648930011077,
+        -0.10344454200756559,
+        0.47870328415837093,
+        -1.2751178423907277,
+        1.1522438700478688,
+        -0.7976622346031945,
+        1.3171791992381259,
+        -1.1390422348213178
+      ],
+      "residual_rms_frames": 0.9303914193933508,
+      "residual_median_abs_frames": 0.9683522347122562,
+      "residual_max_abs_frames": 1.3171791992381259,
+      "equiv_offset_at_first_event": 1.0929373212597966,
+      "equiv_offset_at_last_event": 1.0477328773819181,
+      "drift_across_events_frames": -0.045204443877888446,
+      "optimizer_success": true,
+      "events_local": [
+        232.34086985248877,
+        252.38943978664426,
+        283.12633865933503,
+        303.2621480113622,
+        695.545588951129,
+        710.105829490825,
+        742.1538450283183,
+        760.9893282529736
+      ],
+      "events_ref": [
+        230.99706763822786,
+        251.40168707165034,
+        281.55900987305176,
+        303.4505072137966,
+        693.3398354064828,
+        709.8513901224827,
+        739.7871170837708,
+        761.080637610413
+      ]
+    },
+    "cam3demo": {
+      "a": 1.0009550163651022,
+      "b": -14.53405047908704,
+      "residual_frames_local_minus_predicted": [
+        -1.0829252314515543,
+        1.3908366976486093,
+        -0.9106841908070464,
+        0.841260593403149,
+        0.02140057813653584,
+        0.00215576904304271,
+        0.626319709021459,
+        -0.7455157558690644
+      ],
+      "residual_rms_frames": 0.8361183835200826,
+      "residual_median_abs_frames": 0.7933881746361067,
+      "residual_max_abs_frames": 1.3908366976486093,
+      "equiv_offset_at_first_event": -14.313444499201893,
+      "equiv_offset_at_last_event": -13.807206015006614,
+      "drift_across_events_frames": 0.5062384841952348,
+      "optimizer_success": true,
+      "events_local": [
+        215.6006979075744,
+        238.49856601557966,
+        266.3831686653284,
+        290.0475175285004,
+        679.4893363949228,
+        695.9974151067963,
+        726.5858951172121,
+        746.5279158395373
+      ],
+      "events_ref": [
+        230.99706763822786,
+        251.40168707165034,
+        281.55900987305176,
+        303.4505072137966,
+        693.3398354064828,
+        709.8513901224827,
+        739.7871170837708,
+        761.080637610413
+      ]
+    },
+    "cam4demo": {
+      "a": 0.9992435729758175,
+      "b": -73.42090482855734,
+      "residual_frames_local_minus_predicted": [
+        -0.6592819718809153,
+        0.8070288660957488,
+        -0.8151844130561869,
+        1.0720791821610476,
+        -0.3315411439829177,
+        -0.7965892028554435,
+        1.5733811844579577,
+        0.05560041127205295
+      ],
+      "residual_rms_frames": 0.8748515127488178,
+      "residual_median_abs_frames": 0.8018090344755961,
+      "residual_max_abs_frames": 1.5733811844579577,
+      "equiv_offset_at_first_event": -73.59563725302581,
+      "equiv_offset_at_last_event": -73.9966067904279,
+      "drift_across_events_frames": -0.40096953740212193,
+      "optimizer_success": true,
+      "events_local": [
+        156.74214841332113,
+        178.59764407916268,
+        207.10994178746816,
+        230.87214340324184,
+        619.0629284454989,
+        635.0969453164278,
+        667.3799984721671,
+        687.1396312312571
+      ],
+      "events_ref": [
+        230.99706763822786,
+        251.40168707165034,
+        281.55900987305176,
+        303.4505072137966,
+        693.3398354064828,
+        709.8513901224827,
+        739.7871170837708,
+        761.080637610413
+      ]
+    }
+  }
+}
