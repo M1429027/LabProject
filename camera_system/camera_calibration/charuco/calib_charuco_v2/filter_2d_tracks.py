@@ -58,18 +58,24 @@ def person_to_arrays(person: dict[str, Any] | None) -> tuple[np.ndarray, np.ndar
 
 
 def interpolate_and_smooth(values: np.ndarray, valid: np.ndarray, window: int) -> np.ndarray:
-    n = len(values)
-    x = np.arange(n)
-    out = values.astype(np.float64).copy()
+    # Interpolate only inside the interval where this track was genuinely
+    # observed.  np.interp extrapolates its edge values by default, which can
+    # otherwise create a person before entry or keep one alive after a camera
+    # has lost sight of them.
+    out = np.full_like(values, np.nan, dtype=np.float64)
     if valid.sum() == 0:
         return out
     if valid.sum() == 1:
-        out[:] = values[valid][0]
+        out[valid] = values[valid]
         return out
-    out = np.interp(x, x[valid], values[valid])
-    win = min(int(window), n // 2 * 2 - 1)
+    observed = np.flatnonzero(valid)
+    lo, hi = int(observed[0]), int(observed[-1])
+    segment_x = np.arange(lo, hi + 1)
+    out[lo : hi + 1] = np.interp(segment_x, observed, values[valid])
+    segment_n = hi - lo + 1
+    win = min(int(window), segment_n if segment_n % 2 == 1 else segment_n - 1)
     if win >= 5:
-        out = savgol_filter(out, win, 2)
+        out[lo : hi + 1] = savgol_filter(out[lo : hi + 1], win, 2)
     return out
 
 

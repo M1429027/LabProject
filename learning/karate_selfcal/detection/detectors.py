@@ -207,6 +207,9 @@ class YOLOHRNetTopDownDetector(DetectorBackend):
 
         try:
             from mmpose.apis import inference_topdown, init_model
+            from mmengine.dataset import Compose, pseudo_collate
+            from mmengine.registry import init_default_scope
+            import torch
         except Exception as exc:
             raise RuntimeError(
                 "YOLO->HRNet top-down backend requires MMPose to be installed in "
@@ -215,6 +218,8 @@ class YOLOHRNetTopDownDetector(DetectorBackend):
             ) from exc
 
         self._inference_topdown = inference_topdown
+        self._pseudo_collate = pseudo_collate
+        self._torch = torch
         init_kwargs: dict[str, Any] = {"device": self._resolve_mmpose_device()}
         self.pose_model = init_model(
             self.pose_config_path,
@@ -223,6 +228,15 @@ class YOLOHRNetTopDownDetector(DetectorBackend):
         )
         if self.return_heatmaps:
             self.pose_model.test_cfg["output_heatmaps"] = True
+        scope = self.pose_model.cfg.get("default_scope", "mmpose")
+        if scope is not None:
+            init_default_scope(scope)
+        # MMPose's public inference_topdown() rebuilds this Compose pipeline on
+        # every frame.  Keep one immutable inference pipeline so cross-frame
+        # crops can be collated into a real GPU batch.
+        self._pose_pipeline = Compose(
+            self.pose_model.cfg.test_dataloader.dataset.pipeline
+        )
 
     def _resolve_mmpose_device(self) -> str:
         """Map the generic device flag to an MMPose-compatible string."""
@@ -253,8 +267,12 @@ class YOLOHRNetTopDownDetector(DetectorBackend):
         results = self.detector(frame, **infer_kwargs)
         if not results:
             return []
+        return self._boxes_from_yolo_result(results[0], frame)
 
-        result = results[0]
+    def _boxes_from_yolo_result(
+        self, result: Any, frame: np.ndarray
+    ) -> list[dict[str, Any]]:
+        """Convert and scale one Ultralytics result to normalized boxes."""
         if getattr(result, "boxes", None) is None or result.boxes.xyxy is None:
             return []
 
@@ -286,6 +304,34 @@ class YOLOHRNetTopDownDetector(DetectorBackend):
                 }
             )
         return boxes
+
+    def _detect_person_boxes_batch(
+        self, frames: list[np.ndarray], batch_size: int = 16
+    ) -> list[list[dict[str, Any]]]:
+        """Run YOLO on frame batches while preserving input frame order."""
+        infer_kwargs: dict[str, Any] = {
+            "verbose": False,
+            "conf": self.conf_thresh,
+            "iou": self.iou_thresh,
+            "max_det": self.max_people,
+            "classes": [0],
+        }
+        if self.device and self.device != "auto":
+            infer_kwargs["device"] = self.device
+        output: list[list[dict[str, Any]]] = []
+        step = max(1, int(batch_size))
+        for offset in range(0, len(frames), step):
+            chunk = frames[offset : offset + step]
+            results = self.detector(chunk, **infer_kwargs)
+            output.extend(
+                self._boxes_from_yolo_result(result, frame)
+                for result, frame in zip(results, chunk)
+            )
+        if len(output) != len(frames):
+            raise RuntimeError(
+                f"YOLO batch returned {len(output)} results for {len(frames)} frames"
+            )
+        return output
 
     def _extract_heatmaps(self, sample: Any) -> np.ndarray | None:
         """Best-effort retrieval of per-person heatmaps from an MMPose sample."""
@@ -389,6 +435,58 @@ class YOLOHRNetTopDownDetector(DetectorBackend):
                 y = int(keypoint["y"])
                 cv2.circle(annotated, (x, y), 3, (0, 255, 0), -1)
         return annotated
+
+    def run_batch(
+        self, frames: list[np.ndarray], detection_batch_size: int = 16
+    ) -> list[DetectionResult]:
+        """Run YOLO and HRNet across frames as real GPU batches.
+
+        Output order and schema are identical to calling ``run`` once per
+        frame. Frames without a detected person remain empty and do not consume
+        an HRNet slot.
+        """
+        if not frames:
+            return []
+        boxes_by_frame = self._detect_person_boxes_batch(
+            frames, batch_size=detection_batch_size
+        )
+        data_list = []
+        mapping: list[tuple[int, dict[str, Any]]] = []
+        for frame_index, (frame, boxes) in enumerate(zip(frames, boxes_by_frame)):
+            for box in boxes:
+                data_info = {
+                    "img": frame,
+                    "bbox": np.asarray(box["bbox"], dtype=np.float32)[None],
+                    "bbox_score": np.ones(1, dtype=np.float32),
+                }
+                data_info.update(self.pose_model.dataset_meta)
+                data_list.append(self._pose_pipeline(data_info))
+                mapping.append((frame_index, box))
+
+        people_by_frame: list[list[dict[str, Any]]] = [[] for _ in frames]
+        if data_list:
+            with self._torch.no_grad():
+                samples = self.pose_model.test_step(self._pseudo_collate(data_list))
+            if len(samples) != len(mapping):
+                raise RuntimeError(
+                    f"HRNet batch returned {len(samples)} samples for "
+                    f"{len(mapping)} person crops"
+                )
+            for sample, (frame_index, box) in zip(samples, mapping):
+                people_by_frame[frame_index].extend(
+                    self._extract_people([sample], [box])
+                )
+
+        return [
+            DetectionResult(
+                people=people,
+                annotated_frame=(
+                    self._draw_annotations(frame, people)
+                    if self.draw_annotations else None
+                ),
+            )
+            for frame, people in zip(frames, people_by_frame)
+        ]
 
     def run(self, frame: np.ndarray) -> DetectionResult:
         boxes = self._detect_person_boxes(frame)

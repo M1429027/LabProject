@@ -71,7 +71,16 @@ def draw_light_pose(frame: np.ndarray, people: list[dict[str, Any]], conf: float
     return out
 
 
-def process_video(video_path: Path, detector: Any, output_dir: Path, prefix: str, save_annotated: bool, max_frames: int) -> dict[str, Any]:
+def process_video(
+    video_path: Path,
+    detector: Any,
+    output_dir: Path,
+    prefix: str,
+    save_annotated: bool,
+    max_frames: int,
+    batch_frames: int = 1,
+    detection_batch_size: int = 16,
+) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     json_path = output_dir / f"keypoints_{prefix}.json"
     annotated_path = output_dir / f"hrnet_{prefix}.mp4"
@@ -95,20 +104,38 @@ def process_video(video_path: Path, detector: Any, output_dir: Path, prefix: str
     frames = []
     frame_id = 0
     print(f"[HRNET] {video_path.name}: {frame_count} frames, {fps:.2f} fps, {width}x{height}")
+    effective_batch = max(1, int(batch_frames))
+    batch_api = getattr(detector, "run_batch", None)
     while True:
-        ok, frame = cap.read()
-        if not ok:
+        frame_batch = []
+        while len(frame_batch) < effective_batch:
+            if max_frames > 0 and frame_id + len(frame_batch) >= max_frames:
+                break
+            ok, frame = cap.read()
+            if not ok:
+                break
+            frame_batch.append(frame)
+        if not frame_batch:
             break
-        if max_frames > 0 and frame_id >= max_frames:
-            break
-        result = detector.run(frame)
-        people = [normalize_bbox_for_demo(dict(p)) for p in result.people]
-        frames.append({"frame": int(frame_id), "people": people})
-        if writer is not None:
-            writer.write(draw_light_pose(frame, people))
-        if frame_id % 30 == 0:
-            print(f"  frame {frame_id}/{frame_count}", end="\r", flush=True)
-        frame_id += 1
+        if effective_batch > 1 and callable(batch_api):
+            results = batch_api(
+                frame_batch, detection_batch_size=int(detection_batch_size)
+            )
+        else:
+            results = [detector.run(frame) for frame in frame_batch]
+        if len(results) != len(frame_batch):
+            raise RuntimeError(
+                f"Detector returned {len(results)} results for "
+                f"{len(frame_batch)} frames"
+            )
+        for frame, result in zip(frame_batch, results):
+            people = [normalize_bbox_for_demo(dict(p)) for p in result.people]
+            frames.append({"frame": int(frame_id), "people": people})
+            if writer is not None:
+                writer.write(draw_light_pose(frame, people))
+            if frame_id % 30 == 0:
+                print(f"  frame {frame_id}/{frame_count}", end="\r", flush=True)
+            frame_id += 1
 
     cap.release()
     if writer is not None:
@@ -121,6 +148,8 @@ def process_video(video_path: Path, detector: Any, output_dir: Path, prefix: str
             "fps": fps,
             "total_frames": frame_id,
             "backend": "yolo_hrnet_topdown",
+            "batch_frames": effective_batch,
+            "detection_batch_size": int(detection_batch_size),
             "keypoint_layout": "coco17",
         },
         "keypoint_names": KEYPOINT_NAMES,
@@ -140,6 +169,8 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--config", default="learning/karate_selfcal/configs/detection_hrnet_w32.yaml")
     ap.add_argument("--save-annotated", action="store_true")
     ap.add_argument("--max-frames", type=int, default=0)
+    ap.add_argument("--batch-frames", type=int, default=1)
+    ap.add_argument("--detection-batch-size", type=int, default=16)
     return ap.parse_args()
 
 
@@ -160,6 +191,8 @@ def main() -> None:
             prefix=prefix,
             save_annotated=bool(args.save_annotated),
             max_frames=int(args.max_frames),
+            batch_frames=int(args.batch_frames),
+            detection_batch_size=int(args.detection_batch_size),
         )
         outputs[prefix] = {
             "json": str((output_dir / f"keypoints_{prefix}.json").resolve()),

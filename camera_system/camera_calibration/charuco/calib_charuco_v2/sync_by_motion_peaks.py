@@ -208,6 +208,23 @@ def read_frame(cap: cv2.VideoCapture, target: int, last_target: int | None) -> t
     return cap.read()
 
 
+def draw_detection_and_pose(frame: np.ndarray, payload: dict[str, Any], frame_index: int) -> None:
+    """Draw the selected YOLO person box and filtered HRNet COCO17 pose."""
+    if frame_index < 0 or frame_index >= len(payload.get("frames", [])):
+        return
+    people = payload["frames"][frame_index].get("people", [])
+    if people:
+        bbox = people[0].get("bbox")
+        if isinstance(bbox, list) and len(bbox) >= 4:
+            x1, y1, x2, y2 = [int(round(float(v))) for v in bbox[:4]]
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 180, 255), 3, cv2.LINE_AA)
+            cv2.putText(
+                frame, "YOLO person + HRNet", (x1, max(24, y1 - 10)),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.72, (0, 180, 255), 2, cv2.LINE_AA,
+            )
+    draw_pose(frame, frame_kpts(payload, frame_index))
+
+
 def write_synced_review(
     output: Path,
     line_dir: Path,
@@ -236,7 +253,7 @@ def write_synced_review(
                     int(poses[cam_id]["metadata"].get("width", 1280)),
                     3,
                 ), dtype=np.uint8)
-            draw_pose(frame, frame_kpts(poses[cam_id], target))
+            draw_detection_and_pose(frame, poses[cam_id], target)
             cv2.putText(
                 frame, f"{cam_id} src={target}", (24, 42),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 2, cv2.LINE_AA,

@@ -234,6 +234,8 @@ def pose_candidate(
     valid = np.zeros(17, dtype=bool)
     joint_meta: list[dict[str, Any] | None] = [None] * 17
     med_errs = []
+    effective_views: set[str] = set()
+    inlier_view_counts: list[int] = []
     for j in range(17):
         obs = []
         for cam_id in subset:
@@ -254,6 +256,9 @@ def pose_candidate(
         valid[j] = True
         joint_meta[j] = meta
         med_errs.append(float(meta["median_reprojection_error_px"]))
+        joint_views = [str(cam_id) for cam_id in meta.get("inlier_views", [])]
+        effective_views.update(joint_views)
+        inlier_view_counts.append(len(joint_views))
     if valid.sum() < 7:
         return None
 
@@ -277,9 +282,16 @@ def pose_candidate(
     med = float(np.median(med_errs)) if med_errs else 999.0
     p90 = float(np.percentile(med_errs, 90)) if med_errs else 999.0
     score = med * 0.55 + p90 * 0.08 + bone_pen + bad_bones * 2.2 + (17 - int(valid.sum())) * 1.4
-    score += {2: 7.5, 3: -1.4, 4: -2.4}.get(len(subset), 0.0)
+    # Reward the number of cameras that joint RANSAC actually accepted, not
+    # the size of the candidate pool.  Otherwise an all-camera candidate gets
+    # a four-view bonus even when some cameras have no person observation.
+    effective_view_count = int(round(float(np.median(inlier_view_counts)))) if inlier_view_counts else 0
+    score += {2: 7.5, 3: -1.4, 4: -2.4}.get(effective_view_count, 12.0)
+    score += 0.75 * max(0, len(subset) - len(effective_views))
     return {
         "subset": subset,
+        "effective_subset": tuple(cam_id for cam_id in subset if cam_id in effective_views),
+        "effective_view_count": effective_view_count,
         "pts": pts,
         "valid": valid,
         "root": root,
@@ -325,17 +337,30 @@ def temporal_joint_gate(pts: np.ndarray, valid: np.ndarray, max_root_jump_m: flo
 
 def smooth_sequence(pts: np.ndarray, valid: np.ndarray, window: int = 9) -> np.ndarray:
     n = pts.shape[0]
-    out = pts.copy()
-    x = np.arange(n)
+    # Preserve true absence outside each joint's first/last multiview
+    # observation.  np.interp extrapolates edge values by default, which made
+    # a person appear before entering or remain after leaving the scene.
+    out = np.full_like(pts, np.nan, dtype=np.float64)
     for j in range(17):
         m = valid[:, j] & np.isfinite(pts[:, j, 0])
+        if m.sum() == 1:
+            out[m, j] = pts[m, j]
+            continue
         if m.sum() >= 2:
+            observed = np.flatnonzero(m)
+            lo, hi = int(observed[0]), int(observed[-1])
+            segment_x = np.arange(lo, hi + 1)
             for c in range(3):
-                out[:, j, c] = np.interp(x, x[m], pts[m, j, c])
-            win = min(window, n // 2 * 2 - 1)
+                out[lo : hi + 1, j, c] = np.interp(
+                    segment_x, observed, pts[m, j, c]
+                )
+            segment_n = hi - lo + 1
+            win = min(window, segment_n if segment_n % 2 == 1 else segment_n - 1)
             if win >= 5:
                 for c in range(3):
-                    out[:, j, c] = savgol_filter(out[:, j, c], win, 2)
+                    out[lo : hi + 1, j, c] = savgol_filter(
+                        out[lo : hi + 1, j, c], win, 2
+                    )
     return out
 
 
@@ -492,6 +517,8 @@ def run_robust(
     output_dir: Path,
     min_conf: float,
     ransac_px: float,
+    fast_single_person: bool = False,
+    write_intermediates: bool = True,
 ) -> dict[str, Any]:
     ref_fps = float(poses[reference_id]["metadata"]["fps"])
     ref_start = int(round(events[reference_id]["start_time_s"] * ref_fps))
@@ -516,15 +543,25 @@ def run_robust(
             )
         source_frames.append(src)
 
-    for cam_id, frames in synced_frames_by_cam.items():
-        payload = {"metadata": {**poses[cam_id].get("metadata", {}), "synced_to": reference_id, "sync": sync[cam_id]}, "keypoint_names": KEYPOINT_NAMES, "frames": frames}
-        (output_dir / f"keypoints_{cam_id}_synced_robust_input.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    if write_intermediates:
+        for cam_id, frames in synced_frames_by_cam.items():
+            payload = {"metadata": {**poses[cam_id].get("metadata", {}), "synced_to": reference_id, "sync": sync[cam_id]}, "keypoint_names": KEYPOINT_NAMES, "frames": frames}
+            (output_dir / f"keypoints_{cam_id}_synced_robust_input.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     kps_by_cam = {k: np.asarray(v, dtype=np.float64) for k, v in kps_by_cam.items()}
     n = len(source_frames)
-    states = []
-    for r in (4, 3, 2):
-        for s in combinations(cam_ids, r):
-            states.append(tuple(s))
+    if fast_single_person:
+        # Keep pose-level rejection of one globally bad view, which is important
+        # around self-occlusion, but skip all six two-camera states.  The validated
+        # single-person sequence only selected the four-view state or one of these
+        # leave-one-out states, so this cuts 11 candidates/frame to five without
+        # removing the quality safeguard that made the reconstruction stable.
+        states = [tuple(cam_ids)]
+        states.extend(tuple(c for c in cam_ids if c != excluded) for excluded in cam_ids)
+    else:
+        states = []
+        for r in (4, 3, 2):
+            for s in combinations(cam_ids, r):
+                states.append(tuple(s))
     cands = []
     for f in range(n):
         row = [pose_candidate(f, s, kps_by_cam, cameras, min_conf=min_conf, ransac_px=ransac_px) for s in states]
@@ -584,7 +621,15 @@ def run_robust(
             continue
         raw_pts[f] = c["pts"]
         valid[f] = c["valid"]
-        meta.append({"subset": list(c["subset"]), "score": c["score"], "med_err": c["med_err"], "p90_err": c["p90_err"], "bad_bones": c["bad_bones"]})
+        meta.append({
+            "subset": list(c["effective_subset"]),
+            "candidate_subset": list(c["subset"]),
+            "joint_meta": c["joint_meta"],
+            "score": c["score"],
+            "med_err": c["med_err"],
+            "p90_err": c["p90_err"],
+            "bad_bones": c["bad_bones"],
+        })
 
     gated_pts, gated_valid, temporal_gate_metrics = temporal_joint_gate(raw_pts, valid)
     smoothed = smooth_sequence(gated_pts, gated_valid, window=9)
@@ -599,6 +644,8 @@ def run_robust(
     root_vals = []
     for f in range(n):
         subset = meta[f].get("subset", [])
+        candidate_subset = meta[f].get("candidate_subset", [])
+        frame_joint_meta = meta[f].get("joint_meta", [None] * 17)
         subset_counts["+".join(subset)] = subset_counts.get("+".join(subset), 0) + 1
         k3 = []
         joints = []
@@ -606,16 +653,23 @@ def run_robust(
             X = optimized[f, j]
             ok = bool(np.isfinite(X).all())
             if ok:
+                joint_info = frame_joint_meta[j] if j < len(frame_joint_meta) else None
+                actual_views = (
+                    list(joint_info.get("inlier_views", []))
+                    if gated_valid[f, j] and isinstance(joint_info, dict)
+                    else []
+                )
                 item = {
                     "id": j,
                     "name": KEYPOINT_NAMES[j],
                     "valid": True,
                     "position": [float(v) for v in X],
-                    "num_views": len(subset),
-                    "views": subset,
+                    "num_views": len(actual_views),
+                    "views": actual_views,
+                    "review_imputed": not bool(actual_views),
                     "review_source": "hrnet_temporal2d_poselevel_joint_ransac_skeleton_opt",
                 }
-                joints.append({"id": j, "x": float(X[0]), "y": float(X[1]), "z": float(X[2]), "num_views": len(subset), "views": subset})
+                joints.append({"id": j, "x": float(X[0]), "y": float(X[1]), "z": float(X[2]), "num_views": len(actual_views), "views": actual_views, "review_imputed": not bool(actual_views)})
             else:
                 item = {"id": j, "name": KEYPOINT_NAMES[j], "valid": False, "position": [None, None, None], "num_views": 0}
             k3.append(item)
@@ -628,12 +682,13 @@ def run_robust(
                 L = float(np.linalg.norm(optimized[f, a] - optimized[f, b]))
                 bc += int(L < lo or L > hi)
         bad_counts.append(bc)
-        frames.append({"frame": f, "source_frames": source_frames[f], "selected_view_subset": subset, "keypoints_3d": k3})
-        renderer_frames.append({"frame": f, "source_frames": source_frames[f], "selected_view_subset": subset, "identities": [{"identity_id": 0, "num_joints": len(joints), "joints": joints}]})
+        frames.append({"frame": f, "source_frames": source_frames[f], "selected_view_subset": subset, "candidate_view_subset": candidate_subset, "keypoints_3d": k3})
+        renderer_frames.append({"frame": f, "source_frames": source_frames[f], "selected_view_subset": subset, "candidate_view_subset": candidate_subset, "identities": [{"identity_id": 0, "num_joints": len(joints), "joints": joints}]})
 
     root_vals_np = np.asarray(root_vals, dtype=np.float64) if root_vals else np.zeros((0, 3))
     summary = {
         "stage": "enhanced_demo_robust_pipeline",
+        "triangulation_mode": "fast_single_person_pose_level_leave_one_out" if fast_single_person else "full_pose_level_subset_search",
         "num_frames": n,
         "valid_joints_per_frame_median": float(np.median(valid_counts)) if valid_counts else 0.0,
         "selected_subset_counts": subset_counts,
